@@ -1,0 +1,14 @@
+# NetBeans / Ant
+**/build/
+**/dist/
+**/nbproject/private/
+**/nbbuild/
+**/nbdist/
+
+# Java
+*.class
+*.log
+
+# Windows
+Thumbs.db
+Desktop.ini
