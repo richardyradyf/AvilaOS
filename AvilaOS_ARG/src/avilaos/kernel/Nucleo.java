@@ -1,13 +1,10 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package avilaos.kernel;
 
 import avilaos.hardware.Cpu;
 import avilaos.hardware.Ram;
 import avilaos.hardware.Relojable;
 import avilaos.model.EstadoProceso;
+import avilaos.model.ModoEjecucion;
 import avilaos.model.MotivoBloqueo;
 import avilaos.model.Pcb;
 import avilaos.scheduler.Planificador;
@@ -19,7 +16,7 @@ import java.util.concurrent.Semaphore;
 
 /**
  * @author richard
- * 
+ * @author Gianm
  * Nucleo del sistema operativo de UN computador. Maneja las colas (nuevos, listos,
  * bloqueados, terminados), la admision segun la memoria y el despacho de procesos
  * a la CPU con la politica de planificacion que tenga conectada.
@@ -47,6 +44,9 @@ public class Nucleo implements Relojable {
     private final Semaphore mutex = new Semaphore(1);
     private long cicloActual = 0;
     private int ciclosEnCpu = 0;
+    /** PC del proceso en CPU la ultima vez que el nucleo lo reviso: detecta si ejecuto algo. */
+    private int pcRevisado = 0;
+    private ControladorInstrucciones controlador;
 
     public Nucleo(int idComputador, Ram ram, Cpu cpu, Planificador planificador, Bitacora bitacora) {
         if (idComputador < 1) {
@@ -64,6 +64,7 @@ public class Nucleo implements Relojable {
 
     // ================= operaciones publicas =================
 
+    /** Un proceso nuevo llega al computador: entra a la cola de nuevos y se intenta admitir. */
     public void agregarProceso(Pcb proceso) {
         if (proceso == null) {
             throw new IllegalArgumentException("El proceso no puede ser nulo");
@@ -112,6 +113,7 @@ public class Nucleo implements Relojable {
         }
     }
 
+    /** Un proceso bloqueado deja de estarlo y vuelve a la cola de listos. */
     public void desbloquear(Pcb proceso) {
         mutex.acquireUninterruptibly();
         try {
@@ -126,6 +128,38 @@ public class Nucleo implements Relojable {
         }
     }
 
+    /**
+     * Conecta un controlador que interpreta las instrucciones de los procesos
+     * (por ejemplo, el programa del productor/consumidor). Es opcional: sin
+     * controlador, todas las instrucciones son de usuario y no tienen efectos.
+     */
+    public void setControlador(ControladorInstrucciones controlador) {
+        mutex.acquireUninterruptibly();
+        try {
+            this.controlador = controlador;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /**
+     * Cambia el motivo de bloqueo de un proceso que ya esta bloqueado en este
+     * computador (sigue en la cola de bloqueados).
+     */
+    public void cambiarMotivoBloqueo(Pcb proceso, MotivoBloqueo motivo) {
+        mutex.acquireUninterruptibly();
+        try {
+            if (proceso == null || !bloqueados.contiene(proceso)) {
+                throw new IllegalArgumentException("El proceso no esta bloqueado en el computador " + idComputador);
+            }
+            proceso.cambiarMotivoBloqueo(motivo);
+            registrar(proceso.getEtiqueta() + " sigue bloqueado: " + motivo);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** Cambia la politica en tiempo de ejecucion; la cola de listos se reordena. */
     public void cambiarPlanificador(Planificador nuevo) {
         if (nuevo == null) {
             throw new IllegalArgumentException("El planificador no puede ser nulo");
@@ -143,6 +177,7 @@ public class Nucleo implements Relojable {
 
     // ================= reloj =================
 
+    /** Un ciclo, DESPUES de que la CPU ejecuto su instruccion. */
     @Override
     public void alCiclo(long numeroCiclo) {
         mutex.acquireUninterruptibly();
@@ -217,12 +252,25 @@ public class Nucleo implements Relojable {
 
     // ================= privados (el mutex ya esta tomado) =================
 
+    /** Termina o expulsa al proceso que acaba de ejecutar una instruccion. */
     private void revisarProcesoEnCpu() {
         Pcb proceso = cpu.getProceso();
         if (proceso == null) {
             return;
         }
         ciclosEnCpu++;
+        boolean ejecutoInstruccion = proceso.getPc() > pcRevisado;
+        pcRevisado = proceso.getPc();
+        if (controlador != null && ejecutoInstruccion) {
+            MotivoBloqueo motivo = controlador.despuesDeEjecutar(proceso, cicloActual);
+            if (motivo != null) {
+                cpu.descargar();
+                proceso.bloquear(motivo);
+                bloqueados.agregarAlFinal(proceso);
+                registrar(proceso.getEtiqueta() + " se bloquea: " + motivo);
+                return;
+            }
+        }
         if (proceso.completoSusInstrucciones()) {
             cpu.descargar();
             proceso.terminar(cicloActual, false);
@@ -234,15 +282,29 @@ public class Nucleo implements Relojable {
             proceso.expulsar();
             planificador.alEntrarAListos(listos, proceso);
             registrar(proceso.getEtiqueta() + " es expulsado de la CPU");
+        } else {
+            aplicarModoSiguiente(proceso);
         }
     }
 
+    /** Si hay controlador, la CPU ejecuta la proxima instruccion en el modo que corresponde. */
+    private void aplicarModoSiguiente(Pcb proceso) {
+        if (controlador == null) {
+            return;
+        }
+        ModoEjecucion modo = controlador.modoSiguiente(proceso);
+        if (modo != null) {
+            cpu.setModo(modo);
+        }
+    }
+
+    /** Planificacion a largo plazo: admite los procesos nuevos que caben en la RAM. */
     private void admitirPendientes() {
         int i = 0;
         while (i < nuevos.tamano()) {
             Pcb proceso = nuevos.obtener(i);
             if (ram.reservar(proceso.getMemoria())) {
-                nuevos.eliminar(proceso);
+                nuevos.eliminar(proceso);   // no se avanza i: el siguiente ocupo este lugar
                 proceso.admitir();
                 planificador.alEntrarAListos(listos, proceso);
                 registrar(proceso.getEtiqueta() + " admitido: reserva " + proceso.getMemoria()
@@ -253,6 +315,7 @@ public class Nucleo implements Relojable {
         }
     }
 
+    /** Planificacion a corto plazo: si la CPU esta libre, carga el proximo proceso. */
     private void despacharSiOciosa() {
         if (!cpu.estaOciosa()) {
             return;
@@ -261,9 +324,11 @@ public class Nucleo implements Relojable {
         if (proceso == null) {
             return;
         }
-        proceso.despachar(cicloActual + 1);
+        proceso.despachar(cicloActual + 1);   // empieza a ejecutar en el ciclo siguiente
         cpu.cargar(proceso);
         ciclosEnCpu = 0;
+        pcRevisado = proceso.getPc();
+        aplicarModoSiguiente(proceso);
         registrar("Computador " + idComputador + " selecciona el proceso " + proceso.getEtiqueta()
                 + " (" + planificador.getTipo() + ")");
     }

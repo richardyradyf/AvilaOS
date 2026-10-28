@@ -5,6 +5,7 @@
 package avilaos.model;
 
 /**
+ * 
  * Bloque de control de proceso (PCB). Como cada proceso de AvilaOS tiene un
  * unico hilo, el PCB y el TCB coinciden: esta clase es la ficha completa.
  *
@@ -139,7 +140,18 @@ public class Pcb {
         estado = EstadoProceso.LISTO;
         motivoBloqueo = MotivoBloqueo.NINGUNO;
     }
-
+    
+    /**
+     * BLOQUEADO -> BLOQUEADO con otro motivo. Se usa, por ejemplo, cuando un acceso
+     * remoto a un buffer llega a destino y el proceso debe esperar en un semaforo.
+     */
+    public void cambiarMotivoBloqueo(MotivoBloqueo nuevoMotivo) {
+        if (nuevoMotivo == null || nuevoMotivo == MotivoBloqueo.NINGUNO) {
+            throw new IllegalArgumentException("Un proceso bloqueado necesita un motivo");
+        }
+        exigirEstado(EstadoProceso.BLOQUEADO, "cambiar el motivo de bloqueo");
+        motivoBloqueo = nuevoMotivo;
+    }
 
     public void terminar(long cicloActual, boolean porDeadline) {
         if (estado == EstadoProceso.TERMINADO) {
