@@ -16,32 +16,33 @@ package avilaos.model;
  * dentro de sus secciones criticas (semaforos de Java).
  */
 public class Pcb {
-
+ 
     // ---- datos fijos desde la creacion ----
     private final int id;
     private final String nombre;
     private final int idComputador;
     private final TipoProceso tipo;
-    /** Convencion del proyecto: menor valor = mayor prioridad (1 es la mas alta). */
     private final int prioridad;
     private final int memoria;
     private final int instruccionesTotales;
     private final long cicloCreacion;
-    
     private final long cicloLimite;
-
-
+ 
+    // ---- datos que cambian durante la ejecucion ----
     private EstadoProceso estado;
     private MotivoBloqueo motivoBloqueo;
     private int instruccionesRestantes;
     private int pc;
     private int mar;
-
-    
+ 
     private long cicloPrimeraEjecucion;
     private long cicloFinalizacion;
     private boolean terminadoPorDeadline;
-
+ 
+    private int instruccionesEntreEs;
+    private int ciclosEs;
+    private long cicloFinEs;
+ 
     /**
      * Crea un proceso en estado NUEVO. El ID se genera dentro, despues de validar,
      * para que un proceso invalido no consuma un ID.
@@ -81,7 +82,7 @@ public class Pcb {
         if (cicloCreacion < 0) {
             throw new IllegalArgumentException("El ciclo de creacion no puede ser negativo");
         }
-
+ 
         this.id = GeneradorId.siguienteId();
         this.nombre = nombre.trim();
         this.idComputador = idComputador;
@@ -91,7 +92,7 @@ public class Pcb {
         this.instruccionesTotales = instruccionesTotales;
         this.cicloCreacion = cicloCreacion;
         this.cicloLimite = cicloCreacion + deadline;
-
+ 
         this.estado = EstadoProceso.NUEVO;
         this.motivoBloqueo = MotivoBloqueo.NINGUNO;
         this.instruccionesRestantes = instruccionesTotales;
@@ -101,15 +102,14 @@ public class Pcb {
         this.cicloFinalizacion = -1;
         this.terminadoPorDeadline = false;
     }
-
+ 
     // ---- transiciones de estado ----
-
+ 
     public void admitir() {
         exigirEstado(EstadoProceso.NUEVO, "admitir");
         estado = EstadoProceso.LISTO;
     }
-
-    
+ 
     public void despachar(long cicloActual) {
         exigirEstado(EstadoProceso.LISTO, "despachar");
         estado = EstadoProceso.EJECUCION;
@@ -117,14 +117,12 @@ public class Pcb {
             cicloPrimeraEjecucion = cicloActual;
         }
     }
-
-
+ 
     public void expulsar() {
         exigirEstado(EstadoProceso.EJECUCION, "expulsar");
         estado = EstadoProceso.LISTO;
     }
-
-
+ 
     public void bloquear(MotivoBloqueo motivo) {
         if (motivo == null || motivo == MotivoBloqueo.NINGUNO) {
             throw new IllegalArgumentException("Un proceso bloqueado necesita un motivo");
@@ -133,14 +131,13 @@ public class Pcb {
         estado = EstadoProceso.BLOQUEADO;
         motivoBloqueo = motivo;
     }
-
-
+ 
     public void desbloquear() {
         exigirEstado(EstadoProceso.BLOQUEADO, "desbloquear");
         estado = EstadoProceso.LISTO;
         motivoBloqueo = MotivoBloqueo.NINGUNO;
     }
-    
+ 
     /**
      * BLOQUEADO -> BLOQUEADO con otro motivo. Se usa, por ejemplo, cuando un acceso
      * remoto a un buffer llega a destino y el proceso debe esperar en un semaforo.
@@ -152,7 +149,7 @@ public class Pcb {
         exigirEstado(EstadoProceso.BLOQUEADO, "cambiar el motivo de bloqueo");
         motivoBloqueo = nuevoMotivo;
     }
-
+ 
     public void terminar(long cicloActual, boolean porDeadline) {
         if (estado == EstadoProceso.TERMINADO) {
             throw new IllegalStateException(getEtiqueta() + ": ya esta terminado");
@@ -162,9 +159,9 @@ public class Pcb {
         cicloFinalizacion = cicloActual;
         terminadoPorDeadline = porDeadline;
     }
-
+ 
     // ---- ejecucion ----
-
+ 
     /**
      * Ejecuta una instruccion: avanza el PC y el MAR una unidad y descuenta una
      * instruccion restante. Solo es valido en estado EJECUCION.
@@ -178,104 +175,139 @@ public class Pcb {
         pc++;
         mar++;
     }
-
+ 
     public boolean completoSusInstrucciones() {
         return instruccionesRestantes == 0;
     }
-
+ 
+    // ---- entrada/salida (procesos I/O bound) ----
+ 
+    public void configurarEs(int cadaInstrucciones, int ciclos) {
+        if (tipo != TipoProceso.IO_BOUND) {
+            throw new IllegalStateException(getEtiqueta() + " no es I/O bound");
+        }
+        if (cadaInstrucciones < 1 || ciclos < 1) {
+            throw new IllegalArgumentException("La frecuencia y la duracion de la E/S deben ser 1 o mas");
+        }
+        this.instruccionesEntreEs = cadaInstrucciones;
+        this.ciclosEs = ciclos;
+    }
+ 
+    /** True si acaba de ejecutar la instruccion que dispara una E/S y todavia le quedan instrucciones. */
+    public boolean debePedirEs() {
+        return tipo == TipoProceso.IO_BOUND && instruccionesEntreEs > 0
+                && pc > 0 && pc % instruccionesEntreEs == 0 && instruccionesRestantes > 0;
+    }
+ 
+    public void iniciarEs(long cicloActual) {
+        cicloFinEs = cicloActual + ciclosEs;
+    }
+ 
+    public boolean esTerminada(long cicloActual) {
+        return cicloActual >= cicloFinEs;
+    }
+ 
+    public int getInstruccionesEntreEs() {
+        return instruccionesEntreEs;
+    }
+ 
+    public int getCiclosEs() {
+        return ciclosEs;
+    }
+ 
     // ---- deadline ----
-
+ 
     public long deadlineRestante(long cicloActual) {
         return cicloLimite - cicloActual;
     }
-
+ 
     public boolean deadlineVencido(long cicloActual) {
         return deadlineRestante(cicloActual) <= 0;
     }
-
+ 
     // ---- consulta ----
-
+ 
     public int getId() {
         return id;
     }
-
+ 
     public String getEtiqueta() {
         return "P" + id;
     }
-
+ 
     public String getNombre() {
         return nombre;
     }
-
+ 
     public int getIdComputador() {
         return idComputador;
     }
-
+ 
     public TipoProceso getTipo() {
         return tipo;
     }
-
+ 
     public int getPrioridad() {
         return prioridad;
     }
-
+ 
     public int getMemoria() {
         return memoria;
     }
-
+ 
     public int getInstruccionesTotales() {
         return instruccionesTotales;
     }
-
+ 
     /** Tiempo restante de ejecucion, medido en instrucciones (una por ciclo). */
     public int getInstruccionesRestantes() {
         return instruccionesRestantes;
     }
-
+ 
     public int getPc() {
         return pc;
     }
-
+ 
     public int getMar() {
         return mar;
     }
-
+ 
     public EstadoProceso getEstado() {
         return estado;
     }
-
+ 
     public MotivoBloqueo getMotivoBloqueo() {
         return motivoBloqueo;
     }
-
+ 
     public long getCicloCreacion() {
         return cicloCreacion;
     }
-
+ 
     public long getCicloLimite() {
         return cicloLimite;
     }
-
+ 
     public long getCicloPrimeraEjecucion() {
         return cicloPrimeraEjecucion;
     }
-
+ 
     public long getCicloFinalizacion() {
         return cicloFinalizacion;
     }
-
+ 
     public boolean isTerminadoPorDeadline() {
         return terminadoPorDeadline;
     }
-
+ 
     @Override
     public String toString() {
         return getEtiqueta() + " (" + nombre + ") " + estado
                 + " pc=" + pc + " restantes=" + instruccionesRestantes;
     }
-
+ 
     // ---- privados ----
-
+ 
     private void exigirEstado(EstadoProceso esperado, String operacion) {
         if (estado != esperado) {
             throw new IllegalStateException(getEtiqueta() + ": no se puede " + operacion
