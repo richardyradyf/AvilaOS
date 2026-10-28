@@ -3,6 +3,7 @@ package avilaos.sync;
 import avilaos.hardware.Relojable;
 import avilaos.kernel.ControladorInstrucciones;
 import avilaos.kernel.Nucleo;
+import avilaos.model.EstadoProceso;
 import avilaos.model.ModoEjecucion;
 import avilaos.model.MotivoBloqueo;
 import avilaos.model.Pcb;
@@ -32,25 +33,25 @@ import java.util.concurrent.Semaphore;
  * y se ejecutan al final del ciclo, cuando ningun nucleo esta trabajando.
  */
 public class GestorBuffers implements ControladorInstrucciones, Relojable {
-
+ 
     private static class Asignacion {
         final Pcb proceso;
         final BufferAcotado buffer;
         final int cadaCiclos;
-
+ 
         Asignacion(Pcb proceso, BufferAcotado buffer, int cadaCiclos) {
             this.proceso = proceso;
             this.buffer = buffer;
             this.cadaCiclos = cadaCiclos;
         }
     }
-
+ 
     private static class AccesoRemoto {
         final Pcb proceso;
         final BufferAcotado buffer;
         final OperacionBuffer operacion;
         final long cicloLlegada;
-
+ 
         AccesoRemoto(Pcb proceso, BufferAcotado buffer, OperacionBuffer operacion, long cicloLlegada) {
             this.proceso = proceso;
             this.buffer = buffer;
@@ -58,10 +59,10 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
             this.cicloLlegada = cicloLlegada;
         }
     }
-
+ 
     private final Bitacora bitacora;
     private volatile int latenciaRed;
-
+ 
     private final Lista<Nucleo> nucleos = new Lista<>();
     private final Lista<BufferAcotado> buffers = new Lista<>();
     private final Lista<Asignacion> asignaciones = new Lista<>();
@@ -69,7 +70,7 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
     private final Lista<Pcb> porDespertar = new Lista<>();
     private final Semaphore mutex = new Semaphore(1);
     private int siguienteIdBuffer = 1;
-
+ 
     /** @param latenciaRed ciclos que tarda cada acceso remoto (0 = sin latencia) */
     public GestorBuffers(int latenciaRed, Bitacora bitacora) {
         validarLatencia(latenciaRed);
@@ -79,9 +80,9 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
         this.latenciaRed = latenciaRed;
         this.bitacora = bitacora;
     }
-
+ 
     // ================= configuracion =================
-
+ 
     /** Conecta el nucleo de un computador: este gestor pasa a ser su controlador. */
     public void registrarNucleo(Nucleo nucleo) {
         if (nucleo == null) {
@@ -95,7 +96,7 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
         }
         nucleo.setControlador(this);
     }
-
+ 
     /**
      * Crea un buffer en la RAM del computador anfitrion (1 MB por espacio).
      *
@@ -119,7 +120,7 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
                 + idComputadorAnfitrion + " (" + capacidad + " espacios, " + capacidad + " MB)");
         return buffer;
     }
-
+ 
     /**
      * Indica que el proceso (productor o consumidor) trabaja sobre ese buffer.
      * El proceso debe tener (elementos x (cadaCiclos + 5)) instrucciones; usar
@@ -144,18 +145,18 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
             mutex.release();
         }
     }
-
+ 
     public void setLatenciaRed(int ciclos) {
         validarLatencia(ciclos);
         this.latenciaRed = ciclos;
     }
-
+ 
     public int getLatenciaRed() {
         return latenciaRed;
     }
-
+ 
     // ================= ControladorInstrucciones =================
-
+ 
     @Override
     public ModoEjecucion modoSiguiente(Pcb proceso) {
         mutex.acquireUninterruptibly();
@@ -169,7 +170,7 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
             mutex.release();
         }
     }
-
+ 
     @Override
     public MotivoBloqueo despuesDeEjecutar(Pcb proceso, long ciclo) {
         mutex.acquireUninterruptibly();
@@ -202,9 +203,61 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
             mutex.release();
         }
     }
-
+ 
+    /**
+     * Un proceso termino (normal o por deadline): se le saca de las colas de los
+     * semaforos, se descartan sus accesos en viaje y, si moria con la region critica
+     * tomada, se libera el mutex para que no quede cerrado para siempre.
+     *
+     * Limitacion: si moria a mitad del protocolo (por ejemplo despues de semWait(e)
+     * y antes de semSignal(n)), el buffer puede perder un espacio. Se anota en el informe.
+     */
+    @Override
+    public void alTerminar(Pcb proceso) {
+        mutex.acquireUninterruptibly();
+        try {
+            Asignacion a = buscar(proceso);
+            if (a == null) {
+                return;
+            }
+            OperacionBuffer pendiente = null;
+            int i = 0;
+            while (i < enViaje.tamano()) {
+                AccesoRemoto viaje = enViaje.obtener(i);
+                if (viaje.proceso == proceso) {
+                    pendiente = viaje.operacion;
+                    enViaje.eliminar(viaje);
+                } else {
+                    i++;
+                }
+            }
+            porDespertar.eliminar(proceso);
+            boolean esperabaMutex = a.buffer.getMutex().retirar(proceso);
+            a.buffer.getHayElementos().retirar(proceso);
+            a.buffer.getHayEspacio().retirar(proceso);
+ 
+            int ultimaAplicada = proceso.getPc() - 1 - (pendiente != null ? 1 : 0);
+            if (!esperabaMutex && ultimaAplicada >= 0) {
+                OperacionBuffer op = ProgramaBuffer.operacionEn(proceso.getTipo(), ultimaAplicada, a.cadaCiclos);
+                boolean teniaMutex = op == OperacionBuffer.SEM_WAIT_MUTEX
+                        || op == OperacionBuffer.ANADIR || op == OperacionBuffer.EXTRAER;
+                if (teniaMutex) {
+                    Pcb siguiente = a.buffer.getMutex().senalar();
+                    if (siguiente != null) {
+                        porDespertar.agregarAlFinal(siguiente);
+                    }
+                    bitacora.registrar(0, proceso.getEtiqueta() + " termino con la region critica de "
+                            + a.buffer.getEtiqueta() + " tomada: se libera el mutex");
+                }
+            }
+            asignaciones.eliminar(a);
+        } finally {
+            mutex.release();
+        }
+    }
+ 
     // ================= reloj =================
-
+ 
     /** Va DESPUES de todos los nucleos: completa accesos remotos y despierta procesos. */
     @Override
     public void alCiclo(long numeroCiclo) {
@@ -230,9 +283,9 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
         }
         despertarPendientes(numeroCiclo);
     }
-
+ 
     // ================= consulta =================
-
+ 
     public BufferAcotado getBuffer(int idBuffer) {
         mutex.acquireUninterruptibly();
         try {
@@ -248,7 +301,7 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
         }
         throw new IllegalArgumentException("No existe el buffer " + idBuffer);
     }
-
+ 
     public BufferAcotado[] getBuffers() {
         mutex.acquireUninterruptibly();
         try {
@@ -263,7 +316,7 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
             mutex.release();
         }
     }
-
+ 
     /** Cantidad de accesos remotos que todavia estan "viajando por la red". */
     public int cantidadEnViaje() {
         mutex.acquireUninterruptibly();
@@ -273,9 +326,9 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
             mutex.release();
         }
     }
-
+ 
     // ================= privados =================
-
+ 
     /** Busca la asignacion de un proceso. El mutex ya debe estar tomado. */
     private Asignacion buscar(Pcb proceso) {
         Iterador<Asignacion> it = asignaciones.iterador();
@@ -287,7 +340,7 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
         }
         return null;
     }
-
+ 
     private Nucleo nucleoDe(int idComputador) {
         mutex.acquireUninterruptibly();
         try {
@@ -303,7 +356,7 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
         }
         throw new IllegalArgumentException("El gestor no conoce el computador " + idComputador);
     }
-
+ 
     private AccesoRemoto[] extraerLlegados(long ciclo) {
         mutex.acquireUninterruptibly();
         try {
@@ -329,7 +382,7 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
             mutex.release();
         }
     }
-
+ 
     private void despertarPendientes(long ciclo) {
         Pcb[] lista;
         mutex.acquireUninterruptibly();
@@ -345,10 +398,12 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
             mutex.release();
         }
         for (Pcb proceso : lista) {
-            nucleoDe(proceso.getIdComputador()).desbloquear(proceso);
+            if (proceso.getEstado() == EstadoProceso.BLOQUEADO) {
+                nucleoDe(proceso.getIdComputador()).desbloquear(proceso);
+            }
         }
     }
-
+ 
     private void registrarOperacion(long ciclo, Pcb proceso, BufferAcotado buffer,
                                     OperacionBuffer operacion, ResultadoOperacion r) {
         String texto = proceso.getEtiqueta() + " ejecuta " + operacion + " en " + buffer.getEtiqueta();
@@ -360,7 +415,7 @@ public class GestorBuffers implements ControladorInstrucciones, Relojable {
         }
         bitacora.registrar(ciclo, texto);
     }
-
+ 
     private static void validarLatencia(int ciclos) {
         if (ciclos < 0) {
             throw new IllegalArgumentException("La latencia de red no puede ser negativa");
