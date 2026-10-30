@@ -29,6 +29,7 @@ public class VentanaPrincipal extends JFrame {
     private final PanelBuffers panelBuffers;
     private final PanelLog panelLog;
     private final JTabbedPane pestanas = new JTabbedPane();
+    private final Timer temporizador;
     private int buffersConocidos = -1;
 
     public VentanaPrincipal(AccionesUsuario acciones, ControlSimulacion control, Cluster cluster) {
@@ -62,7 +63,14 @@ public class VentanaPrincipal extends JFrame {
         setLocationRelativeTo(null);
 
         refrescar();
-        new Timer(300, e -> refrescar()).start();
+        temporizador = new Timer(300, e -> refrescar());
+        temporizador.start();
+    }
+
+    @Override
+    public void dispose() {
+        temporizador.stop();
+        super.dispose();
     }
 
     /** Permite agregar pestañas desde fuera (configuracion, metricas). */
