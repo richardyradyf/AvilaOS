@@ -10,6 +10,8 @@ public enum EstadoProceso {
     LISTO("Listo"),
     EJECUCION("Ejecuci\u00f3n"),
     BLOQUEADO("Bloqueado"),
+    LISTO_SUSPENDIDO("Listo/Suspendido"),
+    BLOQUEADO_SUSPENDIDO("Bloqueado/Suspendido"),
     TERMINADO("Terminado");
 
     private final String nombreVisible;
@@ -20,6 +22,11 @@ public enum EstadoProceso {
 
     public String getNombreVisible() {
         return nombreVisible;
+    }
+
+    /** true si el proceso esta en el area de swap (no ocupa RAM). */
+    public boolean estaSuspendido() {
+        return this == LISTO_SUSPENDIDO || this == BLOQUEADO_SUSPENDIDO;
     }
 
     @Override
