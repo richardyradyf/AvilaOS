@@ -23,7 +23,6 @@ public final class ConfiguracionSimulacion {
     public static final int MIN_COMPUTADORES = 2;
     public static final int MAX_COMPUTADORES = 6;
     public static final int MAX_PROCESOS_INICIALES = 200;
-    public static final int MAX_BUFFERS = 20;
 
     /** Un computador de la configuracion. */
     public static final class Computador {
@@ -38,29 +37,13 @@ public final class ConfiguracionSimulacion {
         }
     }
 
-    /** Un buffer de la configuracion. anfitrion 0 = automatico. */
-    public static final class Buffer {
-        public final int anfitrion;
-        public final int capacidad;
-
-        public Buffer(int anfitrion, int capacidad) {
-            this.anfitrion = anfitrion;
-            this.capacidad = capacidad;
-        }
-    }
-
     private final int duracionCicloMs;
-    private final int latenciaRed;
     private final Computador[] computadores;
-    private final Buffer[] buffers;
     private final SolicitudProceso[] procesos;
 
-    public ConfiguracionSimulacion(int duracionCicloMs, int latenciaRed, Computador[] computadores,
-                                   Buffer[] buffers, SolicitudProceso[] procesos) {
+    public ConfiguracionSimulacion(int duracionCicloMs, Computador[] computadores, SolicitudProceso[] procesos) {
         this.duracionCicloMs = duracionCicloMs;
-        this.latenciaRed = latenciaRed;
         this.computadores = computadores;
-        this.buffers = buffers;
         this.procesos = procesos;
     }
 
@@ -68,16 +51,8 @@ public final class ConfiguracionSimulacion {
         return duracionCicloMs;
     }
 
-    public int getLatenciaRed() {
-        return latenciaRed;
-    }
-
     public Computador[] getComputadores() {
         return computadores.clone();
-    }
-
-    public Buffer[] getBuffers() {
-        return buffers.clone();
     }
 
     public SolicitudProceso[] getProcesos() {
@@ -86,21 +61,19 @@ public final class ConfiguracionSimulacion {
 
     // ================= configuracion por defecto =================
 
-    /** Escenario de ejemplo: 2 computadores, 1 buffer remoto, un productor y un consumidor y 3 procesos mas. */
+    /** Escenario de ejemplo: 2 computadores, 3 procesos CPU bound y uno I/O bound. */
     public static ConfiguracionSimulacion porDefecto() {
         Computador[] pcs = {
             new Computador(512, PoliticaPlanificacion.ROUND_ROBIN, 4),
             new Computador(256, PoliticaPlanificacion.EDF, FabricaPlanificadores.QUANTUM_POR_DEFECTO)
         };
-        Buffer[] bufs = {new Buffer(2, 5)};
         SolicitudProceso[] procs = {
             new SolicitudProceso("Calculo A", TipoProceso.CPU_BOUND, 30, 20, 2, 300, 1, 0, 0, 0, 0),
             new SolicitudProceso("Lector", TipoProceso.IO_BOUND, 20, 20, 3, 400, 1, 3, 4, 0, 0),
             new SolicitudProceso("Calculo B", TipoProceso.CPU_BOUND, 25, 30, 1, 250, 2, 0, 0, 0, 0),
-            new SolicitudProceso("Productor", TipoProceso.PRODUCTOR, 0, 10, 1, 600, 1, 0, 2, 12, 1),
-            new SolicitudProceso("Consumidor", TipoProceso.CONSUMIDOR, 0, 10, 1, 600, 2, 0, 2, 12, 1)
+            new SolicitudProceso("Calculo C", TipoProceso.CPU_BOUND, 15, 20, 2, 300, 2, 0, 0, 0, 0)
         };
-        return new ConfiguracionSimulacion(300, 3, pcs, bufs, procs);
+        return new ConfiguracionSimulacion(300, pcs, procs);
     }
 
     // ================= lectura =================
@@ -113,7 +86,6 @@ public final class ConfiguracionSimulacion {
         }
         JsonObjeto o = (JsonObjeto) raiz;
         int duracion = entero(o, "duracionCicloMs", "Duración del ciclo (ms)", 10, 10000);
-        int latencia = entero(o, "latenciaRed", "Latencia de red (ciclos)", 0, 1000);
 
         Lista<Object> listaPcs = lista(o, "computadores");
         if (listaPcs.tamano() < MIN_COMPUTADORES || listaPcs.tamano() > MAX_COMPUTADORES) {
@@ -131,19 +103,6 @@ public final class ConfiguracionSimulacion {
             pcs[i] = new Computador(ram, pol, quantum);
         }
 
-        Lista<Object> listaBufs = o.tiene("buffers") ? lista(o, "buffers") : new Lista<Object>();
-        if (listaBufs.tamano() > MAX_BUFFERS) {
-            throw new EntradaInvalidaException("buffers: máximo " + MAX_BUFFERS);
-        }
-        Buffer[] bufs = new Buffer[listaBufs.tamano()];
-        for (int i = 0; i < bufs.length; i++) {
-            String nombre = "buffers[" + (i + 1) + "]";
-            JsonObjeto b = objeto(listaBufs.obtener(i), nombre);
-            int anfitrion = b.tiene("anfitrion") ? entero(b, "anfitrion", nombre + ".anfitrion", 0, pcs.length) : 0;
-            int capacidad = entero(b, "capacidad", nombre + ".capacidad", 1, 1000);
-            bufs[i] = new Buffer(anfitrion, capacidad);
-        }
-
         Lista<Object> listaProcs = o.tiene("procesos") ? lista(o, "procesos") : new Lista<Object>();
         if (listaProcs.tamano() > MAX_PROCESOS_INICIALES) {
             throw new EntradaInvalidaException("procesos: máximo " + MAX_PROCESOS_INICIALES);
@@ -151,30 +110,35 @@ public final class ConfiguracionSimulacion {
         SolicitudProceso[] procs = new SolicitudProceso[listaProcs.tamano()];
         for (int i = 0; i < procs.length; i++) {
             procs[i] = proceso(objeto(listaProcs.obtener(i), "procesos[" + (i + 1) + "]"),
-                    "procesos[" + (i + 1) + "]", pcs.length, bufs.length);
+                    "procesos[" + (i + 1) + "]", pcs.length);
         }
-        return new ConfiguracionSimulacion(duracion, latencia, pcs, bufs, procs);
+        return new ConfiguracionSimulacion(duracion, pcs, procs);
     }
 
-    private static SolicitudProceso proceso(JsonObjeto p, String nombre, int numPcs, int numBufs) {
-        TipoProceso tipo;
-        String textoTipo = texto(p, "tipo", nombre + ".tipo");
-        try {
-            tipo = TipoProceso.valueOf(textoTipo.trim().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new EntradaInvalidaException(nombre + ".tipo: debe ser CPU_BOUND, IO_BOUND, PRODUCTOR o CONSUMIDOR");
-        }
+    private static SolicitudProceso proceso(JsonObjeto p, String nombre, int numPcs) {
+        TipoProceso tipo = tipo(p, nombre);
         int computador = p.tiene("computador") ? entero(p, "computador", nombre + ".computador", 0, numPcs) : 0;
-        int buffer = p.tiene("buffer") ? entero(p, "buffer", nombre + ".buffer", 0, numBufs) : 0;
         try {
             return ValidadorEntradas.validarProceso(
                     texto(p, "nombre", nombre + ".nombre"), tipo,
                     opcional(p, "instrucciones"), opcional(p, "memoria"), opcional(p, "prioridad"),
                     opcional(p, "deadline"), computador, opcional(p, "ciclosEs"), opcional(p, "cadaCiclos"),
-                    opcional(p, "elementos"), buffer);
+                    "", 0);
         } catch (EntradaInvalidaException e) {
             throw new EntradaInvalidaException(nombre + " (" + textoOpcional(p, "nombre") + "): " + e.getMessage());
         }
+    }
+
+    /** Solo se aceptan procesos CPU bound e I/O bound. */
+    private static TipoProceso tipo(JsonObjeto p, String nombre) {
+        String textoTipo = texto(p, "tipo", nombre + ".tipo").trim().toUpperCase();
+        if (textoTipo.equals("CPU_BOUND")) {
+            return TipoProceso.CPU_BOUND;
+        }
+        if (textoTipo.equals("IO_BOUND")) {
+            return TipoProceso.IO_BOUND;
+        }
+        throw new EntradaInvalidaException(nombre + ".tipo: debe ser CPU_BOUND o IO_BOUND");
     }
 
     // ================= escritura =================
@@ -184,7 +148,6 @@ public final class ConfiguracionSimulacion {
         StringBuilder sb = new StringBuilder();
         sb.append("{\n");
         sb.append("  \"duracionCicloMs\": ").append(duracionCicloMs).append(",\n");
-        sb.append("  \"latenciaRed\": ").append(latenciaRed).append(",\n");
         sb.append("  \"computadores\": [\n");
         for (int i = 0; i < computadores.length; i++) {
             Computador c = computadores[i];
@@ -193,32 +156,19 @@ public final class ConfiguracionSimulacion {
               .append(", \"quantum\": ").append(c.quantum).append("}")
               .append(i < computadores.length - 1 ? "," : "").append("\n");
         }
-        sb.append("  ],\n  \"buffers\": [\n");
-        for (int i = 0; i < buffers.length; i++) {
-            sb.append("    {\"anfitrion\": ").append(buffers[i].anfitrion)
-              .append(", \"capacidad\": ").append(buffers[i].capacidad).append("}")
-              .append(i < buffers.length - 1 ? "," : "").append("\n");
-        }
         sb.append("  ],\n  \"procesos\": [\n");
         for (int i = 0; i < procesos.length; i++) {
             SolicitudProceso p = procesos[i];
             sb.append("    {\"nombre\": \"").append(escapar(p.getNombre())).append("\"")
-              .append(", \"tipo\": \"").append(p.getTipo().name()).append("\"");
-            if (p.getTipo() == TipoProceso.CPU_BOUND || p.getTipo() == TipoProceso.IO_BOUND) {
-                sb.append(", \"instrucciones\": ").append(p.getInstrucciones());
-            }
-            sb.append(", \"memoria\": ").append(p.getMemoria())
+              .append(", \"tipo\": \"").append(p.getTipo().name()).append("\"")
+              .append(", \"instrucciones\": ").append(p.getInstrucciones())
+              .append(", \"memoria\": ").append(p.getMemoria())
               .append(", \"prioridad\": ").append(p.getPrioridad())
               .append(", \"deadline\": ").append(p.getDeadline())
               .append(", \"computador\": ").append(p.getIdComputador());
             if (p.getTipo() == TipoProceso.IO_BOUND) {
                 sb.append(", \"ciclosEs\": ").append(p.getCiclosEs())
                   .append(", \"cadaCiclos\": ").append(p.getCadaCiclos());
-            }
-            if (p.getTipo() == TipoProceso.PRODUCTOR || p.getTipo() == TipoProceso.CONSUMIDOR) {
-                sb.append(", \"cadaCiclos\": ").append(p.getCadaCiclos())
-                  .append(", \"elementos\": ").append(p.getElementos())
-                  .append(", \"buffer\": ").append(p.getIdBuffer());
             }
             sb.append("}").append(i < procesos.length - 1 ? "," : "").append("\n");
         }

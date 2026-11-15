@@ -45,23 +45,14 @@ public final class Sistema {
      */
     public static Sistema construir(ConfiguracionSimulacion config) {
         GeneradorId.reiniciar();
-        Cluster cluster = new Cluster(config.getDuracionCicloMs(), MAX_MENSAJES_BITACORA, config.getLatenciaRed());
+        Cluster cluster = new Cluster(config.getDuracionCicloMs(), MAX_MENSAJES_BITACORA);
         for (ConfiguracionSimulacion.Computador c : config.getComputadores()) {
             cluster.agregarComputador(c.memoriaMb, FabricaPlanificadores.crear(c.politica, c.quantum));
-        }
-        int numero = 0;
-        try {
-            for (ConfiguracionSimulacion.Buffer b : config.getBuffers()) {
-                numero++;
-                cluster.crearBuffer(b.anfitrion, b.capacidad);
-            }
-        } catch (RuntimeException e) {
-            throw new EntradaInvalidaException("No se pudo crear el buffer " + numero + ": " + e.getMessage());
         }
         RecolectorMetricas recolector = new RecolectorMetricas(cluster, INTERVALO_MUESTREO, MAX_PUNTOS_GRAFICA);
         cluster.getReloj().registrar(recolector);
         ControladorSimulador controlador = new ControladorSimulador(cluster);
-        numero = 0;
+        int numero = 0;
         for (SolicitudProceso s : config.getProcesos()) {
             numero++;
             String error = controlador.crearProceso(s);

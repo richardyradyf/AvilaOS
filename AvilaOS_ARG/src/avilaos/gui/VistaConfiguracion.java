@@ -53,8 +53,8 @@ public class VistaConfiguracion extends JPanel {
         botones.add(boton("Restaurar ejemplo", () -> restaurar()));
 
         JLabel ayuda = new JLabel("<html>Edite el JSON y pulse <b>Aplicar</b>. Políticas: FCFS, EDF, ROUND_ROBIN, PRIORIDADES. "
-                + "Tipos de proceso: CPU_BOUND, IO_BOUND, PRODUCTOR, CONSUMIDOR. "
-                + "\"computador\": 0 = automático. Los buffers se numeran B1, B2... en el orden de la lista.</html>");
+                + "Tipos de proceso: CPU_BOUND, IO_BOUND. "
+                + "\"computador\": 0 = automático.</html>");
         JPanel norte = new JPanel(new BorderLayout());
         norte.add(ayuda, BorderLayout.NORTH);
         norte.add(botones, BorderLayout.CENTER);

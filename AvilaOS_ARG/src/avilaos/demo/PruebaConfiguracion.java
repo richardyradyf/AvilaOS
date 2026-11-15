@@ -8,7 +8,6 @@ import avilaos.app.Sistema;
 import avilaos.config.ConfiguracionSimulacion;
 import avilaos.config.EntradaInvalidaException;
 import avilaos.metrics.ReporteMetricas;
-import avilaos.model.EstadoProceso;
 import avilaos.model.PoliticaPlanificacion;
 
 /**
@@ -60,16 +59,16 @@ public class PruebaConfiguracion {
         String json = original.aJson();
         ConfiguracionSimulacion leida = ConfiguracionSimulacion.desdeJson(json);
         verificar("la duracion del ciclo se conserva", leida.getDuracionCicloMs() == original.getDuracionCicloMs());
-        verificar("la latencia se conserva", leida.getLatenciaRed() == original.getLatenciaRed());
         verificar("los computadores se conservan", leida.getComputadores().length == 2
                 && leida.getComputadores()[0].politica == PoliticaPlanificacion.ROUND_ROBIN
                 && leida.getComputadores()[0].quantum == 4 && leida.getComputadores()[1].memoriaMb == 256);
-        verificar("los buffers se conservan", leida.getBuffers().length == 1 && leida.getBuffers()[0].anfitrion == 2);
         verificar("los procesos se conservan", leida.getProcesos().length == original.getProcesos().length
-                && leida.getProcesos()[3].getElementos() == 12);
+                && leida.getProcesos()[1].getCiclosEs() == 3);
         verificar("escribir de nuevo da el mismo texto", leida.aJson().equals(json));
-        verificar("acepta politicas en minusculas", errorAl("{\"duracionCicloMs\":100,\"latenciaRed\":0,"
+        verificar("acepta politicas en minusculas", errorAl("{\"duracionCicloMs\":100,"
                 + "\"computadores\":[{\"memoriaMb\":100,\"politica\":\"fcfs\"},{\"memoriaMb\":100,\"politica\":\"edf\"}]}") == null);
+        verificar("ignora campos viejos como latenciaRed y buffers", errorAl("{\"duracionCicloMs\":100,\"latenciaRed\":3,"
+                + "\"buffers\":[]," + BASE_PCS + "}") == null);
     }
 
     private static void probarErrores() {
@@ -77,25 +76,25 @@ public class PruebaConfiguracion {
         String e = errorAl("{\"duracionCicloMs\": 100,");
         verificar("JSON incompleto indica linea y columna (" + e + ")", e != null && e.contains("línea"));
         verificar("texto que no es objeto", errorAl("[1,2]") != null);
-        e = errorAl("{\"latenciaRed\":0," + BASE_PCS + "}");
+        e = errorAl("{" + BASE_PCS + "}");
         verificar("falta la duracion del ciclo", e != null && e.contains("duracionCicloMs") || e != null && e.contains("Duración"));
-        e = errorAl("{\"duracionCicloMs\":5,\"latenciaRed\":0," + BASE_PCS + "}");
+        e = errorAl("{\"duracionCicloMs\":5," + BASE_PCS + "}");
         verificar("duracion fuera de rango", e != null && e.contains("entre 10 y 10000"));
-        e = errorAl("{\"duracionCicloMs\":100,\"latenciaRed\":\"mucha\"," + BASE_PCS + "}");
-        verificar("latencia que no es numero", e != null && e.contains("número entero"));
-        e = errorAl("{\"duracionCicloMs\":100,\"latenciaRed\":0,\"computadores\":[{\"memoriaMb\":100,\"politica\":\"FCFS\"}]}");
+        e = errorAl("{\"duracionCicloMs\":100,\"computadores\":[{\"memoriaMb\":\"mucha\",\"politica\":\"FCFS\"},"
+                + "{\"memoriaMb\":100,\"politica\":\"FCFS\"}]}");
+        verificar("memoria que no es numero", e != null && e.contains("número entero"));
+        e = errorAl("{\"duracionCicloMs\":100,\"computadores\":[{\"memoriaMb\":100,\"politica\":\"FCFS\"}]}");
         verificar("menos de 2 computadores", e != null && e.contains("entre 2 y 6"));
-        e = errorAl("{\"duracionCicloMs\":100,\"latenciaRed\":0,\"computadores\":[{\"memoriaMb\":100,\"politica\":\"XYZ\"},"
+        e = errorAl("{\"duracionCicloMs\":100,\"computadores\":[{\"memoriaMb\":100,\"politica\":\"XYZ\"},"
                 + "{\"memoriaMb\":100,\"politica\":\"FCFS\"}]}");
         verificar("politica desconocida", e != null && e.contains("FCFS, EDF"));
-        e = errorAl("{\"duracionCicloMs\":100,\"latenciaRed\":0," + BASE_PCS
+        e = errorAl("{\"duracionCicloMs\":100," + BASE_PCS
                 + ",\"procesos\":[{\"nombre\":\"X\",\"tipo\":\"CPU_BOUND\",\"instrucciones\":0,\"memoria\":10,\"prioridad\":1,\"deadline\":10}]}");
         verificar("proceso con 0 instrucciones (" + e + ")", e != null && e.contains("Instrucciones"));
-        e = errorAl("{\"duracionCicloMs\":100,\"latenciaRed\":0," + BASE_PCS
-                + ",\"procesos\":[{\"nombre\":\"X\",\"tipo\":\"PRODUCTOR\",\"memoria\":10,\"prioridad\":1,\"deadline\":10,"
-                + "\"cadaCiclos\":2,\"elementos\":3,\"buffer\":1}]}");
-        verificar("proceso que usa un buffer que no existe", e != null);
-        e = errorAl("{\"duracionCicloMs\":100,\"duracionCicloMs\":200,\"latenciaRed\":0," + BASE_PCS + "}");
+        e = errorAl("{\"duracionCicloMs\":100," + BASE_PCS
+                + ",\"procesos\":[{\"nombre\":\"X\",\"tipo\":\"PRODUCTOR\",\"memoria\":10,\"prioridad\":1,\"deadline\":10}]}");
+        verificar("los productores ya no se aceptan (" + e + ")", e != null && e.contains("CPU_BOUND o IO_BOUND"));
+        e = errorAl("{\"duracionCicloMs\":100,\"duracionCicloMs\":200," + BASE_PCS + "}");
         verificar("clave repetida", e != null && e.contains("repetida"));
     }
 
@@ -103,18 +102,16 @@ public class PruebaConfiguracion {
         System.out.println("--- Sistema armado con la configuracion de ejemplo ---");
         Sistema s = Sistema.construir(ConfiguracionSimulacion.porDefecto());
         verificar("2 computadores", s.getCluster().cantidadComputadores() == 2);
-        verificar("1 buffer en el computador 2", s.getCluster().getBuffers().length == 1
-                && s.getCluster().getBuffers()[0].getIdComputadorAnfitrion() == 2);
         for (int i = 0; i < 600; i++) {
             s.getCluster().avanzarCiclo();
         }
         ReporteMetricas r = s.getRecolector().generarReporte();
         int terminados = s.getCluster().contarTerminados();
-        verificar("los 5 procesos terminaron (" + terminados + ")", terminados == 5);
+        verificar("los 4 procesos terminaron (" + terminados + ")", terminados == 4);
         verificar("hay procesos completados y metricas del sistema", r.getSistema().getCompletados() >= 4);
         s.getCluster().detener();
 
-        String sinCabida = "{\"duracionCicloMs\":100,\"latenciaRed\":0," + BASE_PCS
+        String sinCabida = "{\"duracionCicloMs\":100," + BASE_PCS
                 + ",\"procesos\":[{\"nombre\":\"Gigante\",\"tipo\":\"CPU_BOUND\",\"instrucciones\":5,\"memoria\":500,"
                 + "\"prioridad\":1,\"deadline\":50,\"computador\":1}]}";
         boolean rechazado = false;
