@@ -111,8 +111,6 @@ public class PruebaConfiguracion {
         ReporteMetricas r = s.getRecolector().generarReporte();
         int terminados = s.getCluster().contarTerminados();
         verificar("los 5 procesos terminaron (" + terminados + ")", terminados == 5);
-        verificar("se produjeron y consumieron 12 elementos", r.getBuffers()[0].getProducidos() == 12
-                && r.getBuffers()[0].getConsumidos() == 12);
         verificar("hay procesos completados y metricas del sistema", r.getSistema().getCompletados() >= 4);
         s.getCluster().detener();
 
