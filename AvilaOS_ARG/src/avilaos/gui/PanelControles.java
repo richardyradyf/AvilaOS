@@ -25,7 +25,6 @@ public class PanelControles extends JPanel {
     private final JLabel etiquetaCiclo = new JLabel("Ciclo: 0");
     private final JLabel etiquetaMensaje = new JLabel(" ");
     private final JTextField campoDuracion;
-    private final JTextField campoLatencia;
 
     public PanelControles(ControlSimulacion control, Cluster cluster) {
         super(new BorderLayout());
@@ -34,7 +33,6 @@ public class PanelControles extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
 
         campoDuracion = new JTextField(String.valueOf(cluster.getReloj().getDuracionCicloMs()), 5);
-        campoLatencia = new JTextField(String.valueOf(cluster.getGestorBuffers().getLatenciaRed()), 4);
 
         JPanel fila = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
         fila.add(boton("Iniciar", () -> control.iniciar()));
@@ -45,9 +43,6 @@ public class PanelControles extends JPanel {
         fila.add(new JLabel("  Duración del ciclo (ms):"));
         fila.add(campoDuracion);
         fila.add(boton("Aplicar", () -> aplicarDuracion()));
-        fila.add(new JLabel("  Latencia de red (ciclos):"));
-        fila.add(campoLatencia);
-        fila.add(boton("Aplicar", () -> aplicarLatencia()));
         etiquetaCiclo.setFont(etiquetaCiclo.getFont().deriveFont(java.awt.Font.BOLD));
         fila.add(etiquetaCiclo);
 
@@ -73,15 +68,6 @@ public class PanelControles extends JPanel {
         try {
             int ms = ValidadorEntradas.entero(campoDuracion.getText(), "Duración del ciclo (ms)", 10, 10000);
             return control.setDuracionCicloMs(ms);
-        } catch (EntradaInvalidaException e) {
-            return e.getMessage();
-        }
-    }
-
-    private String aplicarLatencia() {
-        try {
-            int ciclos = ValidadorEntradas.entero(campoLatencia.getText(), "Latencia de red (ciclos)", 0, 1000);
-            return control.setLatenciaRed(ciclos);
         } catch (EntradaInvalidaException e) {
             return e.getMessage();
         }

@@ -1,12 +1,10 @@
 package avilaos.app;
 
 import avilaos.cluster.Cluster;
-import avilaos.config.ValidadorEntradas;
 import avilaos.gui.AccionesUsuario;
 import avilaos.gui.ControlSimulacion;
 import avilaos.model.PoliticaPlanificacion;
 import avilaos.model.SolicitudProceso;
-import avilaos.model.TipoProceso;
 import avilaos.scheduler.FabricaPlanificadores;
 
 /**
@@ -31,21 +29,17 @@ public class ControladorSimulador implements AccionesUsuario, ControlSimulacion 
     public String crearProceso(SolicitudProceso s) {
         try {
             switch (s.getTipo()) {
+                case CPU_BOUND:
+                    cluster.crearProceso(s.getIdComputador(), s.getNombre(), s.getTipo(),
+                            s.getPrioridad(), s.getMemoria(), s.getInstrucciones(), s.getDeadline());
+                    break;
                 case IO_BOUND:
                     cluster.crearProcesoEs(s.getIdComputador(), s.getNombre(), s.getPrioridad(),
                             s.getMemoria(), s.getInstrucciones(), s.getDeadline(),
                             s.getCadaCiclos(), s.getCiclosEs());
                     break;
-                case PRODUCTOR:
-                case CONSUMIDOR:
-                    cluster.crearProcesoBuffer(s.getIdComputador(), s.getNombre(), s.getTipo(),
-                            s.getPrioridad(), s.getMemoria(), s.getDeadline(), s.getIdBuffer(),
-                            s.getCadaCiclos(), s.getElementos());
-                    break;
                 default:
-                    cluster.crearProceso(s.getIdComputador(), s.getNombre(), s.getTipo(),
-                            s.getPrioridad(), s.getMemoria(), s.getInstrucciones(), s.getDeadline());
-                    break;
+                    return "Tipo de proceso no soportado: " + s.getTipo();
             }
             return null;
         } catch (RuntimeException e) {
@@ -81,16 +75,6 @@ public class ControladorSimulador implements AccionesUsuario, ControlSimulacion 
     @Override
     public String setDuracionCicloMs(int ms) {
         return ejecutar(() -> cluster.setDuracionCicloMs(ms));
-    }
-
-    @Override
-    public String setLatenciaRed(int ciclos) {
-        return ejecutar(() -> cluster.setLatenciaRed(ciclos));
-    }
-
-    @Override
-    public String crearBuffer(int idAnfitrion, int capacidad) {
-        return ejecutar(() -> cluster.crearBuffer(idAnfitrion, capacidad));
     }
 
     @Override

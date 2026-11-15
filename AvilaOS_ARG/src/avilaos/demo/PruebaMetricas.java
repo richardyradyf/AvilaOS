@@ -65,7 +65,7 @@ public class PruebaMetricas {
 
     private static Cluster nuevoCluster() {
         GeneradorId.reiniciar();
-        Cluster c = new Cluster(1000, 2000, 5);
+        Cluster c = new Cluster(1000, 2000);
         c.agregarComputador(100, new PlanificadorFcfs());
         c.agregarComputador(100, new PlanificadorFcfs());
         return c;
