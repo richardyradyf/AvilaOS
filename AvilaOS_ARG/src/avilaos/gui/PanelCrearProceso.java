@@ -26,7 +26,8 @@ public class PanelCrearProceso extends JPanel {
     private final AccionesUsuario acciones;
 
     private final JTextField campoNombre = new JTextField(20);
-    private final JComboBox<TipoProceso> comboTipo = new JComboBox<>(TipoProceso.values());
+    private final JComboBox<TipoProceso> comboTipo =
+            new JComboBox<>(new TipoProceso[]{TipoProceso.CPU_BOUND, TipoProceso.IO_BOUND});
     private final JTextField campoInstrucciones = new JTextField(10);
     private final JTextField campoMemoria = new JTextField(10);
     private final JTextField campoPrioridad = new JTextField(10);
@@ -34,11 +35,8 @@ public class PanelCrearProceso extends JPanel {
     private final JComboBox<String> comboComputador = new JComboBox<>();
     private final JTextField campoCiclosEs = new JTextField(10);
     private final JTextField campoCadaCiclos = new JTextField(10);
-    private final JTextField campoElementos = new JTextField(10);
-    private final JComboBox<String> comboBuffer = new JComboBox<>();
     private final JLabel etiquetaMensaje = new JLabel(" ");
 
-    private int[] idsBuffer = new int[0];
     private int fila = 0;
 
     public PanelCrearProceso(AccionesUsuario acciones, int numeroComputadores) {
@@ -53,15 +51,13 @@ public class PanelCrearProceso extends JPanel {
 
         agregarFila("Nombre", campoNombre);
         agregarFila("Tipo", comboTipo);
-        agregarFila("Instrucciones (CPU e I/O bound)", campoInstrucciones);
+        agregarFila("Instrucciones", campoInstrucciones);
         agregarFila("Memoria (MB)", campoMemoria);
         agregarFila("Prioridad (1 = la más alta)", campoPrioridad);
         agregarFila("Deadline (ciclos desde la creación)", campoDeadline);
         agregarFila("Computador", comboComputador);
         agregarFila("Ciclos de cada E/S (I/O bound)", campoCiclosEs);
-        agregarFila("Cada cuántas instrucciones pide E/S, o ciclos por elemento", campoCadaCiclos);
-        agregarFila("Elementos a producir o consumir", campoElementos);
-        agregarFila("Buffer (productor y consumidor)", comboBuffer);
+        agregarFila("Cada cuántas instrucciones pide E/S (I/O bound)", campoCadaCiclos);
 
         JButton botonCrear = new JButton("Crear proceso");
         botonCrear.addActionListener(e -> crear());
@@ -92,14 +88,6 @@ public class PanelCrearProceso extends JPanel {
         actualizarCamposSegunTipo();
     }
 
-    public void setBuffers(int[] ids) {
-        idsBuffer = ids.clone();
-        comboBuffer.removeAllItems();
-        for (int id : ids) {
-            comboBuffer.addItem("B" + id);
-        }
-    }
-
     private void agregarFila(String texto, JComponent campo) {
         GridBagConstraints c = new GridBagConstraints();
         c.gridy = fila++;
@@ -114,28 +102,20 @@ public class PanelCrearProceso extends JPanel {
     }
 
     private void actualizarCamposSegunTipo() {
-        TipoProceso tipo = (TipoProceso) comboTipo.getSelectedItem();
-        boolean usaInstrucciones = tipo == TipoProceso.CPU_BOUND || tipo == TipoProceso.IO_BOUND;
-        boolean esIo = tipo == TipoProceso.IO_BOUND;
-        boolean usaBuffer = tipo == TipoProceso.PRODUCTOR || tipo == TipoProceso.CONSUMIDOR;
-        campoInstrucciones.setEnabled(usaInstrucciones);
+        boolean esIo = comboTipo.getSelectedItem() == TipoProceso.IO_BOUND;
         campoCiclosEs.setEnabled(esIo);
-        campoCadaCiclos.setEnabled(esIo || usaBuffer);
-        campoElementos.setEnabled(usaBuffer);
-        comboBuffer.setEnabled(usaBuffer);
+        campoCadaCiclos.setEnabled(esIo);
     }
 
     private void crear() {
         try {
             int idComputador = comboComputador.getSelectedIndex();
-            int posBuffer = comboBuffer.getSelectedIndex();
-            int idBuffer = (posBuffer >= 0 && posBuffer < idsBuffer.length) ? idsBuffer[posBuffer] : 0;
 
             SolicitudProceso solicitud = ValidadorEntradas.validarProceso(
                     campoNombre.getText(), (TipoProceso) comboTipo.getSelectedItem(),
                     campoInstrucciones.getText(), campoMemoria.getText(), campoPrioridad.getText(),
                     campoDeadline.getText(), idComputador, campoCiclosEs.getText(),
-                    campoCadaCiclos.getText(), campoElementos.getText(), idBuffer);
+                    campoCadaCiclos.getText(), "", 0);
 
             String error = acciones.crearProceso(solicitud);
             if (error != null) {
@@ -159,7 +139,6 @@ public class PanelCrearProceso extends JPanel {
         campoDeadline.setText("");
         campoCiclosEs.setText("");
         campoCadaCiclos.setText("");
-        campoElementos.setText("");
         comboTipo.setSelectedIndex(0);
         comboComputador.setSelectedIndex(0);
     }
