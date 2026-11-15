@@ -66,9 +66,9 @@ public class PruebaPcb {
         verificar(p.getPc() == 3 && p.getMar() == 3, "tras 3 instrucciones, PC y MAR valen 3");
         verificar(p.getInstruccionesRestantes() == 2, "quedan 2 instrucciones");
 
-        p.bloquear(MotivoBloqueo.BUFFER_LLENO);
+        p.bloquear(MotivoBloqueo.REGION_CRITICA_OCUPADA);
         verificar(p.getEstado() == EstadoProceso.BLOQUEADO, "bloquear: EJECUCION -> BLOQUEADO");
-        verificar(p.getMotivoBloqueo() == MotivoBloqueo.BUFFER_LLENO, "se guarda el motivo del bloqueo");
+        verificar(p.getMotivoBloqueo() == MotivoBloqueo.REGION_CRITICA_OCUPADA, "se guarda el motivo del bloqueo");
 
         p.desbloquear();
         verificar(p.getEstado() == EstadoProceso.LISTO, "desbloquear: BLOQUEADO -> LISTO");

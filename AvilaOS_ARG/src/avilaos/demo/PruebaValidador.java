@@ -63,14 +63,9 @@ public class PruebaValidador {
         verificar(io.getCiclosEs() == 10 && io.getCadaCiclos() == 5 && io.getIdComputador() == 2,
                 "I/O bound: ciclos de E/S y computador 2");
 
-        SolicitudProceso prod = ValidadorEntradas.validarProceso("Productor", TipoProceso.PRODUCTOR,
-                "", "16", "3", "1000", 1, "", "2", "20", 1);
-        verificar(prod.getInstrucciones() == 0 && prod.getElementos() == 20 && prod.getIdBuffer() == 1,
-                "productor: sin instrucciones (las calcula el sistema), con buffer y elementos");
-
-        SolicitudProceso cons = ValidadorEntradas.validarProceso("Consumidor", TipoProceso.CONSUMIDOR,
-                "texto basura", "16", "3", "1000", 2, "", "3", "20", 1);
-        verificar(cons.getCadaCiclos() == 3, "los campos que no aplican al tipo se ignoran");
+        SolicitudProceso otro = ValidadorEntradas.validarProceso("Editor", TipoProceso.CPU_BOUND,
+                "30", "16", "3", "1000", 2, "texto basura", "", "", 0);
+        verificar(otro.getCiclosEs() == 0, "los campos que no aplican al tipo se ignoran");
     }
 
     private static void probarProcesosInvalidos() {
@@ -89,10 +84,6 @@ public class PruebaValidador {
                 "100", "64", "2", "0", 0, "", "", "", 0)), "deadline 0");
         verificar(invalida(() -> ValidadorEntradas.validarProceso("X", TipoProceso.IO_BOUND,
                 "100", "64", "2", "500", 0, "", "5", "", 0)), "I/O bound sin ciclos de E/S");
-        verificar(invalida(() -> ValidadorEntradas.validarProceso("X", TipoProceso.PRODUCTOR,
-                "", "16", "3", "1000", 1, "", "2", "20", 0)), "productor sin buffer");
-        verificar(invalida(() -> ValidadorEntradas.validarProceso("X", TipoProceso.CONSUMIDOR,
-                "", "16", "3", "1000", 1, "", "2", "", 1)), "consumidor sin elementos");
         verificar(invalida(() -> ValidadorEntradas.validarProceso("X", TipoProceso.CPU_BOUND,
                 "100", "64", "2", "500", -1, "", "", "", 0)), "computador inválido");
     }

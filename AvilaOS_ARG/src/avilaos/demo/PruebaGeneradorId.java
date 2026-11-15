@@ -17,8 +17,8 @@ public class PruebaGeneradorId {
         verificar(TipoProceso.values().length == 4, "TipoProceso tiene 4 valores");
         verificar(TipoProceso.IO_BOUND.toString().equals("I/O bound"), "nombre visible de IO_BOUND");
         verificar(MotivoBloqueo.values().length == 6, "MotivoBloqueo tiene 6 valores");
-        verificar(MotivoBloqueo.BUFFER_VACIO.toString().equals("Buffer vac\u00edo"),
-                "nombre visible de BUFFER_VACIO");
+        verificar(MotivoBloqueo.ESPERA_ES.toString().equals("Esperando E/S"),
+                "nombre visible de ESPERA_ES");
 
         // --- generador de IDs ---
         GeneradorId.reiniciar();
