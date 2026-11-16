@@ -13,15 +13,15 @@ import avilaos.util.Lista;
 /**
  * @author richard
  * 
- * Configuracion completa de una simulacion: duracion del ciclo, latencia de red,
- * computadores (RAM y politica), buffers y procesos iniciales. Se lee y se escribe como
+ * Configuracion completa de una simulacion: duracion del ciclo, el computador
+ * (RAM y politica) y los procesos iniciales. Se lee y se escribe como
  * JSON (desdeJson / aJson). Toda la validacion ocurre aqui: si desdeJson devuelve un
  * objeto, sus datos son validos.
  */
 public final class ConfiguracionSimulacion {
 
-    public static final int MIN_COMPUTADORES = 2;
-    public static final int MAX_COMPUTADORES = 6;
+    public static final int MIN_COMPUTADORES = 1;
+    public static final int MAX_COMPUTADORES = 1;
     public static final int MAX_PROCESOS_INICIALES = 200;
 
     /** Un computador de la configuracion. */
@@ -61,17 +61,16 @@ public final class ConfiguracionSimulacion {
 
     // ================= configuracion por defecto =================
 
-    /** Escenario de ejemplo: 2 computadores, 3 procesos CPU bound y uno I/O bound. */
+    /** Escenario de ejemplo: 1 computador, 3 procesos CPU bound y uno I/O bound. */
     public static ConfiguracionSimulacion porDefecto() {
         Computador[] pcs = {
-            new Computador(512, PoliticaPlanificacion.ROUND_ROBIN, 4),
-            new Computador(256, PoliticaPlanificacion.EDF, FabricaPlanificadores.QUANTUM_POR_DEFECTO)
+            new Computador(512, PoliticaPlanificacion.ROUND_ROBIN, 4)
         };
         SolicitudProceso[] procs = {
             new SolicitudProceso("Calculo A", TipoProceso.CPU_BOUND, 30, 20, 2, 300, 1, 0, 0, 0, 0),
             new SolicitudProceso("Lector", TipoProceso.IO_BOUND, 20, 20, 3, 400, 1, 3, 4, 0, 0),
-            new SolicitudProceso("Calculo B", TipoProceso.CPU_BOUND, 25, 30, 1, 250, 2, 0, 0, 0, 0),
-            new SolicitudProceso("Calculo C", TipoProceso.CPU_BOUND, 15, 20, 2, 300, 2, 0, 0, 0, 0)
+            new SolicitudProceso("Calculo B", TipoProceso.CPU_BOUND, 25, 30, 1, 250, 1, 0, 0, 0, 0),
+            new SolicitudProceso("Calculo C", TipoProceso.CPU_BOUND, 15, 20, 2, 300, 1, 0, 0, 0, 0)
         };
         return new ConfiguracionSimulacion(300, pcs, procs);
     }
@@ -88,9 +87,9 @@ public final class ConfiguracionSimulacion {
         int duracion = entero(o, "duracionCicloMs", "Duración del ciclo (ms)", 10, 10000);
 
         Lista<Object> listaPcs = lista(o, "computadores");
-        if (listaPcs.tamano() < MIN_COMPUTADORES || listaPcs.tamano() > MAX_COMPUTADORES) {
-            throw new EntradaInvalidaException("computadores: debe haber entre " + MIN_COMPUTADORES
-                    + " y " + MAX_COMPUTADORES + " (hay " + listaPcs.tamano() + ")");
+         if (listaPcs.tamano() < MIN_COMPUTADORES || listaPcs.tamano() > MAX_COMPUTADORES) {
+            throw new EntradaInvalidaException("computadores: debe haber exactamente 1 (hay "
+                    + listaPcs.tamano() + ")");
         }
         Computador[] pcs = new Computador[listaPcs.tamano()];
         for (int i = 0; i < pcs.length; i++) {

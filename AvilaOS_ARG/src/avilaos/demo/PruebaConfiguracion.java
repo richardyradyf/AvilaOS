@@ -39,8 +39,7 @@ public class PruebaConfiguracion {
         }
     }
 
-    private static final String BASE_PCS = "\"computadores\":[{\"memoriaMb\":100,\"politica\":\"FCFS\"},"
-            + "{\"memoriaMb\":100,\"politica\":\"EDF\",\"quantum\":3}]";
+    private static final String BASE_PCS = "\"computadores\":[{\"memoriaMb\":100,\"politica\":\"EDF\",\"quantum\":3}]";
 
     public static void main(String[] args) {
         probarIdaYVuelta();
@@ -59,14 +58,14 @@ public class PruebaConfiguracion {
         String json = original.aJson();
         ConfiguracionSimulacion leida = ConfiguracionSimulacion.desdeJson(json);
         verificar("la duracion del ciclo se conserva", leida.getDuracionCicloMs() == original.getDuracionCicloMs());
-        verificar("los computadores se conservan", leida.getComputadores().length == 2
+        verificar("el computador se conserva", leida.getComputadores().length == 1
                 && leida.getComputadores()[0].politica == PoliticaPlanificacion.ROUND_ROBIN
-                && leida.getComputadores()[0].quantum == 4 && leida.getComputadores()[1].memoriaMb == 256);
+                && leida.getComputadores()[0].quantum == 4 && leida.getComputadores()[0].memoriaMb == 512);
         verificar("los procesos se conservan", leida.getProcesos().length == original.getProcesos().length
                 && leida.getProcesos()[1].getCiclosEs() == 3);
         verificar("escribir de nuevo da el mismo texto", leida.aJson().equals(json));
         verificar("acepta politicas en minusculas", errorAl("{\"duracionCicloMs\":100,"
-                + "\"computadores\":[{\"memoriaMb\":100,\"politica\":\"fcfs\"},{\"memoriaMb\":100,\"politica\":\"edf\"}]}") == null);
+                + "\"computadores\":[{\"memoriaMb\":100,\"politica\":\"edf\"}]}") == null);
         verificar("ignora campos viejos como latenciaRed y buffers", errorAl("{\"duracionCicloMs\":100,\"latenciaRed\":3,"
                 + "\"buffers\":[]," + BASE_PCS + "}") == null);
     }
@@ -80,13 +79,12 @@ public class PruebaConfiguracion {
         verificar("falta la duracion del ciclo", e != null && e.contains("duracionCicloMs") || e != null && e.contains("Duración"));
         e = errorAl("{\"duracionCicloMs\":5," + BASE_PCS + "}");
         verificar("duracion fuera de rango", e != null && e.contains("entre 10 y 10000"));
-        e = errorAl("{\"duracionCicloMs\":100,\"computadores\":[{\"memoriaMb\":\"mucha\",\"politica\":\"FCFS\"},"
-                + "{\"memoriaMb\":100,\"politica\":\"FCFS\"}]}");
+        e = errorAl("{\"duracionCicloMs\":100,\"computadores\":[{\"memoriaMb\":\"mucha\",\"politica\":\"FCFS\"}]}");
         verificar("memoria que no es numero", e != null && e.contains("número entero"));
-        e = errorAl("{\"duracionCicloMs\":100,\"computadores\":[{\"memoriaMb\":100,\"politica\":\"FCFS\"}]}");
-        verificar("menos de 2 computadores", e != null && e.contains("entre 2 y 6"));
-        e = errorAl("{\"duracionCicloMs\":100,\"computadores\":[{\"memoriaMb\":100,\"politica\":\"XYZ\"},"
+        e = errorAl("{\"duracionCicloMs\":100,\"computadores\":[{\"memoriaMb\":100,\"politica\":\"FCFS\"},"
                 + "{\"memoriaMb\":100,\"politica\":\"FCFS\"}]}");
+        verificar("mas de 1 computador", e != null && e.contains("exactamente 1"));
+        e = errorAl("{\"duracionCicloMs\":100,\"computadores\":[{\"memoriaMb\":100,\"politica\":\"XYZ\"}]}");
         verificar("politica desconocida", e != null && e.contains("FCFS, EDF"));
         e = errorAl("{\"duracionCicloMs\":100," + BASE_PCS
                 + ",\"procesos\":[{\"nombre\":\"X\",\"tipo\":\"CPU_BOUND\",\"instrucciones\":0,\"memoria\":10,\"prioridad\":1,\"deadline\":10}]}");
@@ -101,7 +99,7 @@ public class PruebaConfiguracion {
     private static void probarSistemaCompleto() {
         System.out.println("--- Sistema armado con la configuracion de ejemplo ---");
         Sistema s = Sistema.construir(ConfiguracionSimulacion.porDefecto());
-        verificar("2 computadores", s.getCluster().cantidadComputadores() == 2);
+        verificar("1 computador", s.getCluster().cantidadComputadores() == 1);
         for (int i = 0; i < 600; i++) {
             s.getCluster().avanzarCiclo();
         }
