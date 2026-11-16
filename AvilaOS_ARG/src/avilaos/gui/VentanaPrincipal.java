@@ -1,12 +1,9 @@
 package avilaos.gui;
 
 import avilaos.cluster.Cluster;
-import avilaos.cluster.Computador;
 import java.awt.BorderLayout;
-import java.awt.GridLayout;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
-import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
@@ -22,7 +19,7 @@ public class VentanaPrincipal extends JFrame {
 
     private final PanelControles controles;
     private final PanelCrearProceso panelCrear;
-    private final PanelComputador[] panelesComputador;
+    private final PanelComputador panelComputador;
     private final PanelLog panelLog;
     private final JTabbedPane pestanas = new JTabbedPane();
     private final Timer temporizador;
@@ -32,20 +29,13 @@ public class VentanaPrincipal extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         controles = new PanelControles(control, cluster);
-        panelCrear = new PanelCrearProceso(acciones, cluster.cantidadComputadores());
-
-        Computador[] computadores = cluster.getComputadores();
-        panelesComputador = new PanelComputador[computadores.length];
-        JPanel columna = new JPanel(new GridLayout(0, 1, 0, 6));
-        for (int i = 0; i < computadores.length; i++) {
-            panelesComputador[i] = new PanelComputador(cluster, computadores[i], control);
-            columna.add(panelesComputador[i]);
-        }
+        panelCrear = new PanelCrearProceso(acciones);
+        panelComputador = new PanelComputador(cluster, cluster.getComputador(1), control);
 
         panelLog = new PanelLog(cluster.getBitacora());
 
         pestanas.addTab("Crear proceso", panelCrear);
-        pestanas.addTab("Computadores", new JScrollPane(columna));
+        pestanas.addTab("Computador", new JScrollPane(panelComputador));
         pestanas.addTab("Log", panelLog);
 
         add(controles, BorderLayout.NORTH);
@@ -76,12 +66,9 @@ public class VentanaPrincipal extends JFrame {
     /** Vuelve a leer el estado del sistema y lo muestra. Se llama sola cada 300 ms. */
     public void refrescar() {
         controles.refrescar();
-        for (PanelComputador p : panelesComputador) {
-            p.refrescar();
-        }
-        panelLog.refrescar();
+        panelComputador.refrescar();
+        
     }
-
     /** Abre la ventana en el hilo de eventos de Swing. */
     public void mostrar() {
         SwingUtilities.invokeLater(() -> setVisible(true));

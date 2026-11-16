@@ -32,30 +32,22 @@ public class PanelCrearProceso extends JPanel {
     private final JTextField campoMemoria = new JTextField(10);
     private final JTextField campoPrioridad = new JTextField(10);
     private final JTextField campoDeadline = new JTextField(10);
-    private final JComboBox<String> comboComputador = new JComboBox<>();
     private final JTextField campoCiclosEs = new JTextField(10);
     private final JTextField campoCadaCiclos = new JTextField(10);
     private final JLabel etiquetaMensaje = new JLabel(" ");
 
     private int fila = 0;
 
-    public PanelCrearProceso(AccionesUsuario acciones, int numeroComputadores) {
+    public PanelCrearProceso(AccionesUsuario acciones) {
         this.acciones = acciones;
         setLayout(new GridBagLayout());
         setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-
-        comboComputador.addItem("Automático (ÁvilaOS elige)");
-        for (int i = 1; i <= numeroComputadores; i++) {
-            comboComputador.addItem("Computador " + i);
-        }
-
         agregarFila("Nombre", campoNombre);
         agregarFila("Tipo", comboTipo);
         agregarFila("Instrucciones", campoInstrucciones);
         agregarFila("Memoria (MB)", campoMemoria);
         agregarFila("Prioridad (1 = la más alta)", campoPrioridad);
         agregarFila("Deadline (ciclos desde la creación)", campoDeadline);
-        agregarFila("Computador", comboComputador);
         agregarFila("Ciclos de cada E/S (I/O bound)", campoCiclosEs);
         agregarFila("Cada cuántas instrucciones pide E/S (I/O bound)", campoCadaCiclos);
 
@@ -109,7 +101,7 @@ public class PanelCrearProceso extends JPanel {
 
     private void crear() {
         try {
-            int idComputador = comboComputador.getSelectedIndex();
+            int idComputador = 1;
 
             SolicitudProceso solicitud = ValidadorEntradas.validarProceso(
                     campoNombre.getText(), (TipoProceso) comboTipo.getSelectedItem(),
@@ -140,7 +132,6 @@ public class PanelCrearProceso extends JPanel {
         campoCiclosEs.setText("");
         campoCadaCiclos.setText("");
         comboTipo.setSelectedIndex(0);
-        comboComputador.setSelectedIndex(0);
     }
 
     private void mostrarMensaje(String texto, boolean error) {

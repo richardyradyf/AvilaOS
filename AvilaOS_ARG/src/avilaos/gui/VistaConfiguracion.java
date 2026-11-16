@@ -25,9 +25,8 @@ import javax.swing.JTextArea;
 /**
  * @author richard
  * 
- * Pestaña de configuracion: editor del JSON de la simulacion (duracion del ciclo, latencia,
- * computadores, buffers y procesos iniciales) con botones para validar, cargar y guardar
- * archivos y aplicar la configuracion (reinicia la simulacion con los nuevos datos).
+ * Pestaña de configuracion: editor del JSON de la simulacion (duracion del ciclo, el computador y los procesos iniciales)
+ * con botones para validar, cargar y guardar archivos y aplicar la configuracion (reinicia la simulacion con los nuevos datos).
  */
 public class VistaConfiguracion extends JPanel {
 

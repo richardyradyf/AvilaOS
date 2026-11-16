@@ -14,7 +14,7 @@ import javax.swing.table.DefaultTableModel;
 /**
  * @author Gianm
  * Pestaña de metricas: grafica de utilizacion de CPU y tablas con las metricas de cada
- * computador, del sistema completo y de los buffers. Se refresca sola cada 500 ms
+ * computador y del sistema completo. Se refresca sola cada 500 ms
  * mientras es visible; solo lee, nunca modifica la simulacion.
  */
 public class VistaMetricas extends JPanel {
