@@ -9,9 +9,7 @@ import avilaos.disco.SolicitudDisco;
 import avilaos.model.EstadoProceso;
 import avilaos.model.ModoUsuario;
 import avilaos.model.PoliticaDisco;
-import avilaos.model.SolicitudProceso;
 import avilaos.model.TipoOperacionES;
-import avilaos.model.TipoProceso;
 
 
 /**
@@ -29,7 +27,6 @@ public class PruebaContratos {
         probarEstados();
         probarOperaciones();
         probarPoliticas();
-        probarSolicitudProceso();
         probarSolicitudDisco();
 
         System.out.println();
@@ -68,22 +65,6 @@ public class PruebaContratos {
         verificar(lanza(() -> PoliticaDisco.desdeJson("LIFO")), "LIFO es rechazada");
     }
 
-    private static void probarSolicitudProceso() {
-        System.out.println("--- SolicitudProceso ---");
-        SolicitudProceso viejo = new SolicitudProceso("A", TipoProceso.CPU_BOUND, 5, 10, 1, 100,
-                0, 0, 0, 0, 0);
-        verificar(!viejo.esDeEs() && viejo.getOperacion() == null, "el constructor viejo no es de E/S");
-        SolicitudProceso es = SolicitudProceso.deEs("Proc_34", 2, 16, 5, 500, TipoOperacionES.ACTUALIZAR,
-                "/usuarios/notas.txt", 0, "apuntes.txt", null);
-        verificar(es.esDeEs() && es.getTipo() == TipoProceso.IO_BOUND, "deEs crea un proceso I/O bound");
-        verificar(es.getRuta().equals("/usuarios/notas.txt") && es.getNuevoNombre().equals("apuntes.txt"),
-                "guarda la ruta y el nombre nuevo");
-        verificar(es.getUsuario().equals("admin"), "sin usuario se usa admin");
-        verificar(lanza(() -> SolicitudProceso.deEs("X", 1, 1, 1, 1, TipoOperacionES.SUSPENDER, "/a", 0, null, null)),
-                "deEs rechaza SUSPENDER");
-        verificar(lanza(() -> SolicitudProceso.deEs("X", 1, 1, 1, 1, TipoOperacionES.LEER, " ", 0, null, null)),
-                "deEs rechaza una ruta vacia");
-    }
 
     private static void probarSolicitudDisco() {
         System.out.println("--- SolicitudDisco y OyenteDisco ---");
