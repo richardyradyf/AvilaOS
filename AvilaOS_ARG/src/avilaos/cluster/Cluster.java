@@ -25,6 +25,7 @@ import java.util.concurrent.Semaphore;
 public class Cluster {
  
     public static final int MINIMO_COMPUTADORES = 1;
+    public static final int MAXIMO_COMPUTADORES = 1;
  
     private final RelojGlobal reloj;
     private final Bitacora bitacora;
@@ -43,6 +44,9 @@ public class Cluster {
         try {
             if (conectadoAlReloj || reloj.estaActivo()) {
                 throw new IllegalStateException("No se pueden agregar computadores con el reloj en marcha");
+            }
+            if (computadores.tamano() >= MAXIMO_COMPUTADORES) {
+                throw new IllegalStateException("El sistema tiene un solo computador");
             }
             Computador nuevo = new Computador(computadores.tamano() + 1, memoriaMb, planificador, bitacora);
             computadores.agregarAlFinal(nuevo);

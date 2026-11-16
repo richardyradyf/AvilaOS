@@ -67,7 +67,6 @@ public class PruebaMetricas {
         GeneradorId.reiniciar();
         Cluster c = new Cluster(1000, 2000);
         c.agregarComputador(100, new PlanificadorFcfs());
-        c.agregarComputador(100, new PlanificadorFcfs());
         return c;
     }
 
@@ -76,7 +75,7 @@ public class PruebaMetricas {
         Cluster c = nuevoCluster();
         RecolectorMetricas rec = new RecolectorMetricas(c, 1, 100);
         c.getReloj().registrar(rec);
-        // Dos procesos CPU bound de 10 instrucciones en el computador 1; el computador 2 queda ocioso
+    // Dos procesos CPU bound de 10 instrucciones en el computador 1
         c.crearProceso(1, "A", TipoProceso.CPU_BOUND, 1, 10, 10, 1000);
         c.crearProceso(1, "B", TipoProceso.CPU_BOUND, 1, 10, 10, 1000);
         for (int i = 0; i < 40; i++) {
@@ -86,7 +85,7 @@ public class PruebaMetricas {
         verificar("computador 1: 2 procesos completados", r.getPorComputador()[0].getCompletados() == 2);
         verificar("computador 1: ningun vencido", r.getPorComputador()[0].getVencidos() == 0);
         verificar("cumplimiento de deadlines 100 %", cerca(r.getPorComputador()[0].getCumplimientoDeadlines(), 1.0));
-        verificar("computador 2 ocioso: utilizacion 0", cerca(r.getPorComputador()[1].getUtilizacion(), 0.0));
+        verificar("el reporte tiene un solo computador", r.getPorComputador().length == 1);
         double u1 = r.getPorComputador()[0].getUtilizacion();
         verificar("computador 1: utilizacion entre 0 y 1 (" + u1 + ")", u1 > 0.0 && u1 <= 1.0);
         verificar("sistema: 2 completados", r.getSistema().getCompletados() == 2);
