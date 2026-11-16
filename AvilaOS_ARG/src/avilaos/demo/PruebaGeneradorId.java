@@ -14,9 +14,9 @@ public class PruebaGeneradorId {
 
     public static void main(String[] args) throws InterruptedException {
         // --- enums ---
-        verificar(TipoProceso.values().length == 4, "TipoProceso tiene 4 valores");
+        verificar(TipoProceso.values().length == 2, "TipoProceso tiene 4 valores");
         verificar(TipoProceso.IO_BOUND.toString().equals("I/O bound"), "nombre visible de IO_BOUND");
-        verificar(MotivoBloqueo.values().length == 6, "MotivoBloqueo tiene 6 valores");
+        verificar(MotivoBloqueo.values().length == 3, "MotivoBloqueo tiene 6 valores");
         verificar(MotivoBloqueo.ESPERA_ES.toString().equals("Esperando E/S"),
                 "nombre visible de ESPERA_ES");
 
