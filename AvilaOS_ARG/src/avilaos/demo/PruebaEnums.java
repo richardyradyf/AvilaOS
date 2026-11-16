@@ -10,7 +10,7 @@ public class PruebaEnums {
     private static int fallos = 0;
 
     public static void main(String[] args) {
-        verificar(EstadoProceso.values().length == 5, "EstadoProceso tiene 5 valores");
+        verificar(EstadoProceso.values().length == 7, "EstadoProceso tiene 7 valores");
         verificar(EstadoProceso.valueOf("NUEVO") == EstadoProceso.NUEVO, "valueOf encuentra NUEVO");
         verificar(EstadoProceso.EJECUCION.getNombreVisible().equals("Ejecuci\u00f3n"),
                 "nombre visible de EJECUCION");
