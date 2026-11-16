@@ -9,6 +9,7 @@ import avilaos.cluster.Computador;
 import avilaos.model.EstadoProceso;
 import avilaos.model.GeneradorId;
 import avilaos.model.Pcb;
+import avilaos.scheduler.PlanificadorRoundRobin;
 import avilaos.model.PoliticaPlanificacion;
 import avilaos.model.TipoProceso;
 import avilaos.scheduler.PlanificadorFcfs;
@@ -23,7 +24,7 @@ public class PruebaCluster {
     private static int fallos = 0;
 
     public static void main(String[] args) throws InterruptedException {
-        probarDosComputadoresIndependientes();
+        probarUnComputador();
         probarValidaciones();
         probarConHiloDelReloj();
 
@@ -32,49 +33,49 @@ public class PruebaCluster {
         System.out.println(fallos == 0 ? "TODO CORRECTO" : "HAY FALLOS: revisar las lineas FALLO");
     }
 
-    private static void probarDosComputadoresIndependientes() {
-        System.out.println("--- Dos computadores, un reloj ---");
+    private static void probarUnComputador() {
+        System.out.println("--- Un computador, un reloj ---");
         GeneradorId.reiniciar();
         Cluster cluster = new Cluster(1000, 500);
         Computador c1 = cluster.agregarComputador(100, new PlanificadorFcfs());
-        Computador c2 = cluster.agregarComputador(50, new PlanificadorFcfs());
-        verificar(c1.getId() == 1 && c2.getId() == 2, "los identificadores son 1 y 2");
-        verificar(cluster.cantidadComputadores() == 2, "el cluster tiene 2 computadores");
+        verificar(c1.getId() == 1 && cluster.cantidadComputadores() == 1, "el sistema tiene el computador 1");
+        verificar(lanza(IllegalStateException.class, () -> cluster.agregarComputador(50, new PlanificadorFcfs())),
+                "no se agrega un segundo computador");
 
         Pcb a = cluster.crearProceso(1, "A", TipoProceso.CPU_BOUND, 1, 30, 4, 100);
-        Pcb b = cluster.crearProceso(2, "B", TipoProceso.CPU_BOUND, 1, 20, 6, 100);
-        verificar(a.getIdComputador() == 1 && b.getIdComputador() == 2,
-                "cada proceso queda en su computador");
-        verificar(c1.getRam().getUsada() == 30 && c2.getRam().getUsada() == 20,
-                "cada computador reserva su propia memoria");
+        Pcb b = cluster.crearProceso(1, "B", TipoProceso.CPU_BOUND, 1, 20, 2, 100);
+        verificar(a.getIdComputador() == 1 && b.getIdComputador() == 1, "los procesos quedan en el computador 1");
+        verificar(c1.getRam().getUsada() == 50, "la RAM reserva la memoria de los dos");
 
         for (int i = 0; i < 5; i++) {
             cluster.avanzarCiclo();
         }
         verificar(a.getEstado() == EstadoProceso.TERMINADO && a.getCicloFinalizacion() == 5,
                 "A termina en el ciclo 5 (1 de despacho + 4 instrucciones)");
-        verificar(b.getEstado() == EstadoProceso.EJECUCION, "B sigue ejecutando en el otro computador");
-        cluster.avanzarCiclo();
-        cluster.avanzarCiclo();
-        verificar(b.getEstado() == EstadoProceso.TERMINADO && b.getCicloFinalizacion() == 7,
-                "B termina en el ciclo 7");
-        verificar(cluster.getCicloActual() == 7, "el reloj global va por el ciclo 7");
-        verificar(cluster.contarTerminados() == 2, "hay 2 procesos terminados en total");
-        verificar(c1.getRam().getUsada() == 0 && c2.getRam().getUsada() == 0, "ambas memorias quedaron libres");
+        verificar(b.getEstado() != EstadoProceso.TERMINADO, "B espera a que A termine (FCFS)");
+        for (int i = 0; i < 10; i++) {
+            cluster.avanzarCiclo();
+        }
+        verificar(b.getEstado() == EstadoProceso.TERMINADO && b.getCicloFinalizacion() > 5,
+                "B termina despues de A");
+        verificar(cluster.getCicloActual() == 15, "el reloj global va por el ciclo 15");
+        verificar(cluster.contarTerminados() == 2, "hay 2 procesos terminados");
+        verificar(c1.getRam().getUsada() == 0, "la memoria quedo libre");
 
-        cluster.cambiarPlanificador(2, new PlanificadorFcfs());
-        verificar(c2.getNucleo().getPlanificador().getTipo() == PoliticaPlanificacion.FCFS,
-                "se puede cambiar la politica de un computador");
-        verificar(cluster.getBitacora().contiene("Computador 2 agregado"), "la bitacora registra el alta");
+        cluster.cambiarPlanificador(1, new PlanificadorRoundRobin(3));
+        verificar(c1.getNucleo().getPlanificador().getTipo() == PoliticaPlanificacion.ROUND_ROBIN,
+                "se puede cambiar la politica del computador");
+        verificar(cluster.getBitacora().contiene("Computador 1 agregado"), "la bitacora registra el alta");
     }
 
     private static void probarValidaciones() {
         System.out.println("--- Validaciones ---");
         GeneradorId.reiniciar();
+        Cluster vacio = new Cluster(1000, 100);
+        verificar(lanza(IllegalStateException.class, vacio::iniciar),
+                "no se inicia sin computador");
         Cluster cluster = new Cluster(1000, 100);
         cluster.agregarComputador(100, new PlanificadorFcfs());
-        verificar(lanza(IllegalStateException.class, cluster::iniciar),
-                "no se inicia con menos de 2 computadores");
         verificar(lanza(IllegalArgumentException.class, () -> cluster.getComputador(3)),
                 "pedir un computador inexistente lanza excepcion");
         verificar(lanza(IllegalArgumentException.class,
@@ -90,9 +91,8 @@ public class PruebaCluster {
         GeneradorId.reiniciar();
         Cluster cluster = new Cluster(2, 100);
         cluster.agregarComputador(100, new PlanificadorFcfs());
-        cluster.agregarComputador(100, new PlanificadorFcfs());
         cluster.crearProceso(1, "H1", TipoProceso.CPU_BOUND, 1, 10, 20, 500);
-        cluster.crearProceso(2, "H2", TipoProceso.CPU_BOUND, 1, 10, 20, 500);
+        cluster.crearProceso(1, "H2", TipoProceso.CPU_BOUND, 1, 10, 20, 500);
         cluster.iniciar();
         int espera = 0;
         while (cluster.contarTerminados() < 2 && espera < 100) {

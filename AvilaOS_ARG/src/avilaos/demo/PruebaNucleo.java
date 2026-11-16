@@ -147,9 +147,9 @@ public class PruebaNucleo {
         s.avanzar(3);
         verificar(p4.getPc() == 2, "P4 ejecuto 2 instrucciones");
 
-        s.nucleo.bloquearProcesoEnCpu(MotivoBloqueo.BUFFER_VACIO);
+        s.nucleo.bloquearProcesoEnCpu(MotivoBloqueo.REGION_CRITICA_OCUPADA);
         verificar(p4.getEstado() == EstadoProceso.BLOQUEADO
-                && p4.getMotivoBloqueo() == MotivoBloqueo.BUFFER_VACIO, "P4 queda bloqueado con su motivo");
+                && p4.getMotivoBloqueo() == MotivoBloqueo.REGION_CRITICA_OCUPADA, "P4 queda bloqueado con su motivo");
         verificar(s.nucleo.getBloqueados().length == 1, "P4 esta en la cola de bloqueados");
         verificar(s.cpu.estaOciosa() && s.cpu.getModo() == ModoEjecucion.SISTEMA_OPERATIVO,
                 "la CPU quedo libre y en modo sistema operativo");

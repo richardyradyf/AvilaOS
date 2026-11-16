@@ -7,16 +7,10 @@ package avilaos.model;
 public enum MotivoBloqueo {
 
     NINGUNO("Ninguno"),
-    /** Espera que termine una operacion de E/S (procesos I/O bound). */
+    /** Espera que termine una operacion de E/S. */
     ESPERA_ES("Esperando E/S"),
-    /** Semaforo s (mutex) del buffer: otro proceso esta en la region critica. */
-    REGION_CRITICA_OCUPADA("Regi\u00f3n cr\u00edtica ocupada"),
-    /** Semaforo e (espacios libres): un productor no encuentra espacio. */
-    BUFFER_LLENO("Buffer lleno"),
-    /** Semaforo n (elementos): un consumidor no encuentra elementos. */
-    BUFFER_VACIO("Buffer vac\u00edo"),
-    /** Latencia de red al acceder a un buffer alojado en otro computador. */
-    ACCESO_REMOTO("Acceso remoto al buffer");
+    /** Espera en un semaforo: otro proceso esta en la region critica. */
+    REGION_CRITICA_OCUPADA("Regi\u00f3n cr\u00edtica ocupada");
 
     private final String nombreVisible;
 

@@ -24,11 +24,6 @@ public interface ControlSimulacion {
 
     String setDuracionCicloMs(int ms);
 
-    String setLatenciaRed(int ciclos);
-
-    /** idAnfitrion 0 = automatico. */
-    String crearBuffer(int idAnfitrion, int capacidad);
-
     /** Cambia la politica de un computador en caliente. */
     String cambiarPolitica(int idComputador, PoliticaPlanificacion politica, int quantum);
 }

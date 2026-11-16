@@ -1,4 +1,4 @@
 /**
- * Semaforos propios y buffer productor-consumidor (Fase 7).
+ * Semaforos propios de AvilaOS (SemaforoSO), que bloquean procesos simulados.
  */
 package avilaos.sync;

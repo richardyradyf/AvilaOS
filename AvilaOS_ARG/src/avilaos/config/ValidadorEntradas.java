@@ -93,15 +93,6 @@ public final class ValidadorEntradas {
                 ciclosEsOk = entero(ciclosEs, "Ciclos de E/S", 1, MAX_CICLOS);
                 cadaOk = entero(cadaCiclos, "Instrucciones entre cada E/S", 1, MAX_CICLOS);
                 break;
-            case PRODUCTOR:
-            case CONSUMIDOR:
-                cadaOk = entero(cadaCiclos, "Ciclos por elemento", 1, MAX_CICLOS);
-                elementosOk = entero(elementos, "Elementos", 1, MAX_ELEMENTOS);
-                if (idBuffer < 1) {
-                    throw new EntradaInvalidaException("Buffer: debe existir un buffer y seleccionarlo");
-                }
-                bufferOk = idBuffer;
-                break;
             default:
                 throw new EntradaInvalidaException("Tipo: valor no reconocido");
         }
