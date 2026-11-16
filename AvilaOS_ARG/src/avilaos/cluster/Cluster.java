@@ -16,15 +16,15 @@ import java.util.concurrent.Semaphore;
 /**
  * @author richard
  * 
- * El sistema distribuido completo: un reloj global, una bitacora compartida y
- * dos o mas computadores. Es la unica puerta de entrada para la interfaz grafica
- * y para el cargador de configuracion.
+ * El sistema completo: un reloj global, una bitacora y un solo computador.
+ * Es la unica puerta de entrada para la interfaz grafica y para el cargador
+ * de configuracion.
  *
- * Los computadores se agregan antes de iniciar el reloj (el minimo es 2).
+ * El computador se agrega antes de iniciar el reloj.
  */
 public class Cluster {
  
-    public static final int MINIMO_COMPUTADORES = 2;
+    public static final int MINIMO_COMPUTADORES = 1;
  
     private final RelojGlobal reloj;
     private final Bitacora bitacora;
@@ -81,9 +81,8 @@ public class Cluster {
     // ---- control del reloj ----
  
     public void iniciar() {
-        if (cantidadComputadores() < MINIMO_COMPUTADORES) {
-            throw new IllegalStateException("El sistema necesita al menos " + MINIMO_COMPUTADORES
-                    + " computadores para iniciar");
+         if (cantidadComputadores() < MINIMO_COMPUTADORES) {
+            throw new IllegalStateException("El sistema necesita un computador para iniciar");
         }
         conectarAlReloj();
         reloj.iniciar();

@@ -71,10 +71,11 @@ public class PruebaCluster {
     private static void probarValidaciones() {
         System.out.println("--- Validaciones ---");
         GeneradorId.reiniciar();
+        Cluster vacio = new Cluster(1000, 100);
+        verificar(lanza(IllegalStateException.class, vacio::iniciar),
+                "no se inicia sin computador");
         Cluster cluster = new Cluster(1000, 100);
         cluster.agregarComputador(100, new PlanificadorFcfs());
-        verificar(lanza(IllegalStateException.class, cluster::iniciar),
-                "no se inicia con menos de 2 computadores");
         verificar(lanza(IllegalArgumentException.class, () -> cluster.getComputador(3)),
                 "pedir un computador inexistente lanza excepcion");
         verificar(lanza(IllegalArgumentException.class,
