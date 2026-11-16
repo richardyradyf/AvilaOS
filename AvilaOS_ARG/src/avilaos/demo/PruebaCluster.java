@@ -82,7 +82,7 @@ public class PruebaCluster {
                 () -> cluster.crearProceso(5, "X", TipoProceso.CPU_BOUND, 1, 10, 5, 50)),
                 "crear un proceso en un computador inexistente lanza excepcion");
         verificar(lanza(IllegalArgumentException.class,
-                () -> cluster.agregarComputador(0, new PlanificadorFcfs())),
+                () -> vacio.agregarComputador(0, new PlanificadorFcfs())),
                 "una RAM de 0 MB es rechazada");
     }
 
