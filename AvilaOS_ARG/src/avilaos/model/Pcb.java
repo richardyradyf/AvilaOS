@@ -132,10 +132,47 @@ public class Pcb {
         motivoBloqueo = motivo;
     }
  
+/**
+* Ocurre el evento que el proceso esperaba.
+* BLOQUEADO -> LISTO y BLOQUEADO_SUSPENDIDO -> LISTO_SUSPENDIDO (sigue en el swap).
+*/
     public void desbloquear() {
-        exigirEstado(EstadoProceso.BLOQUEADO, "desbloquear");
-        estado = EstadoProceso.LISTO;
+        if (estado == EstadoProceso.BLOQUEADO) {
+            estado = EstadoProceso.LISTO;
+        } else if (estado == EstadoProceso.BLOQUEADO_SUSPENDIDO) {
+            estado = EstadoProceso.LISTO_SUSPENDIDO;
+        } else {
+            throw new IllegalStateException(getEtiqueta() + ": no se puede desbloquear desde el estado " + estado);
+        }
         motivoBloqueo = MotivoBloqueo.NINGUNO;
+    }
+
+    /**
+     * El planificador a mediano plazo saca al proceso de la RAM y lo manda al swap.
+     * LISTO -> LISTO_SUSPENDIDO y BLOQUEADO -> BLOQUEADO_SUSPENDIDO (conserva el motivo).
+     */
+    public void suspender() {
+        if (estado == EstadoProceso.LISTO) {
+            estado = EstadoProceso.LISTO_SUSPENDIDO;
+        } else if (estado == EstadoProceso.BLOQUEADO) {
+            estado = EstadoProceso.BLOQUEADO_SUSPENDIDO;
+        } else {
+            throw new IllegalStateException(getEtiqueta() + ": no se puede suspender desde el estado " + estado);
+        }
+    }
+
+    /**
+     * El proceso vuelve del swap a la RAM.
+     * LISTO_SUSPENDIDO -> LISTO y BLOQUEADO_SUSPENDIDO -> BLOQUEADO.
+     */
+    public void reactivar() {
+        if (estado == EstadoProceso.LISTO_SUSPENDIDO) {
+            estado = EstadoProceso.LISTO;
+        } else if (estado == EstadoProceso.BLOQUEADO_SUSPENDIDO) {
+            estado = EstadoProceso.BLOQUEADO;
+        } else {
+            throw new IllegalStateException(getEtiqueta() + ": no se puede reactivar desde el estado " + estado);
+        }
     }
  
     /**
