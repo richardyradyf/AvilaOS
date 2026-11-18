@@ -13,6 +13,9 @@ import avilaos.util.Cola;
 import avilaos.util.Iterador;
 import avilaos.util.Lista;
 import java.util.concurrent.Semaphore;
+import avilaos.disco.OyenteDisco;
+import avilaos.disco.PuertoEs;
+import avilaos.disco.SolicitudDisco;
 
 /**
  * @author richard
@@ -29,7 +32,7 @@ import java.util.concurrent.Semaphore;
  * que todo se protege con un semaforo mutex de Java. Los metodos publicos toman el
  * mutex; los privados asumen que ya esta tomado (el semaforo no es reentrante).
  */
-public class Nucleo implements Relojable {
+public class Nucleo implements Relojable, OyenteDisco {
  
     private final int idComputador;
     private final Ram ram;
@@ -50,6 +53,7 @@ public class Nucleo implements Relojable {
     /** PC del proceso en CPU la ultima vez que el nucleo lo reviso: detecta si ejecuto algo. */
     private int pcRevisado = 0;
     private ControladorInstrucciones controlador;
+    private PuertoEs puertoEs;
  
     public Nucleo(int idComputador, Ram ram, Cpu cpu, Planificador planificador, Bitacora bitacora) {
         if (idComputador < 1) {
@@ -192,7 +196,56 @@ public class Nucleo implements Relojable {
             mutex.release();
         }
     }
- 
+     /**
+     * Conecta el puerto por el que los procesos de E/S piden el disco. Sin puerto,
+     * los procesos de E/S se ejecutan como procesos normales.
+     */
+    public void setPuertoEs(PuertoEs puertoEs) {
+        mutex.acquireUninterruptibly();
+        try {
+            this.puertoEs = puertoEs;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /**
+     * Aviso del disco: termino la solicitud de un proceso de E/S. Si el proceso estaba
+     * bloqueado vuelve a listos (o termina, si ya no le quedan instrucciones); si estaba
+     * bloqueado/suspendido pasa a listos/suspendidos. Si ya no esta esperando (por
+     * ejemplo, termino por deadline), el aviso se ignora.
+     */
+    
+    @Override
+    public void solicitudAtendida(SolicitudDisco solicitud, long ciclo) {
+        Pcb proceso = solicitud.getProceso();
+        if (proceso == null) {
+            return;
+        }
+        mutex.acquireUninterruptibly();
+        try {
+            if (bloqueados.eliminar(proceso)) {
+                registrar(proceso.getEtiqueta() + ": el disco atendio " + solicitud.getOperacion()
+                        + " " + solicitud.getRuta());
+                proceso.desbloquear();
+                if (proceso.completoSusInstrucciones()) {
+                    proceso.terminar(ciclo, false);
+                    ram.liberar(proceso.getMemoria());
+                    terminados.encolar(proceso);
+                    avisarTerminado(proceso);
+                    registrar(proceso.getEtiqueta() + " termina y libera " + proceso.getMemoria() + " MB");
+                } else {
+                    planificador.alEntrarAListos(listos, proceso);
+                    registrar(proceso.getEtiqueta() + " se desbloquea y pasa a listos");
+                }
+            } else if (bloqueadosSuspendidos.eliminar(proceso)) {
+                pasarAListosSuspendidos(proceso);
+            }
+        } finally {
+            mutex.release();
+        }
+    }
+    
     /**
      * Conecta un controlador que interpreta las instrucciones de los procesos
      * (por ejemplo, el programa del productor/consumidor). Es opcional: sin
@@ -355,6 +408,16 @@ public class Nucleo implements Relojable {
                 registrar(proceso.getEtiqueta() + " se bloquea: " + motivo);
                 return;
             }
+        }
+        if (ejecutoInstruccion && proceso.esDeArchivo() && !proceso.yaPidioDisco() && puertoEs != null) {
+            cpu.descargar();
+            proceso.marcarDiscoPedido();
+            proceso.bloquear(MotivoBloqueo.ESPERA_DISCO);
+            bloqueados.agregarAlFinal(proceso);
+            SolicitudDisco s = puertoEs.pedirDisco(proceso, cicloActual);
+            registrar(proceso.getEtiqueta() + " pide el disco (" + s.getOperacion() + " " + s.getRuta()
+                    + ", bloque " + s.getBloqueDestino() + ") y se bloquea");
+            return;
         }
         if (proceso.completoSusInstrucciones()) {
             cpu.descargar();
