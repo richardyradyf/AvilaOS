@@ -17,9 +17,10 @@ import java.util.concurrent.Semaphore;
 /**
  * @author richard
  * @author Gianm
- * Nucleo del sistema operativo de UN computador. Maneja las colas (nuevos, listos,
- * bloqueados, terminados), la admision segun la memoria y el despacho de procesos
- * a la CPU con la politica de planificacion que tenga conectada.
+ * Nucleo del sistema operativo de UN computador. Maneja las colas del modelo de
+ * siete estados (nuevos, listos, bloqueados, listos/suspendidos,
+ * bloqueados/suspendidos y terminados), la admision segun la memoria y el despacho
+ * de procesos a la CPU con la politica de planificacion que tenga conectada.
  *
  * Debe registrarse en el reloj DESPUES de la CPU: en cada ciclo la CPU ejecuta una
  * instruccion y luego el nucleo decide (terminar, expulsar, admitir, despachar).
@@ -39,6 +40,8 @@ public class Nucleo implements Relojable {
     private final Cola<Pcb> nuevos = new Cola<>();
     private final Cola<Pcb> listos = new Cola<>();
     private final Lista<Pcb> bloqueados = new Lista<>();
+    private final Cola<Pcb> listosSuspendidos = new Cola<>();
+    private final Lista<Pcb> bloqueadosSuspendidos = new Lista<>();
     private final Cola<Pcb> terminados = new Cola<>();
  
     private final Semaphore mutex = new Semaphore(1);
@@ -113,14 +116,78 @@ public class Nucleo implements Relojable {
         }
     }
  
-    /** Un proceso bloqueado deja de estarlo y vuelve a la cola de listos. */
+      /**
+     * Ocurre el evento que el proceso esperaba. Si estaba bloqueado pasa a listos;
+     * si estaba bloqueado/suspendido pasa a listos/suspendidos (sigue en el swap).
+     */
     public void desbloquear(Pcb proceso) {
         mutex.acquireUninterruptibly();
         try {
-            if (proceso == null || !bloqueados.eliminar(proceso)) {
+            if (proceso != null && bloqueados.eliminar(proceso)) {
+                pasarBloqueadoAListos(proceso);
+            } else if (proceso != null && bloqueadosSuspendidos.eliminar(proceso)) {
+                pasarAListosSuspendidos(proceso);
+            } else {
                 throw new IllegalArgumentException("El proceso no esta bloqueado en el computador " + idComputador);
             }
-            pasarBloqueadoAListos(proceso);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /**
+     * Planificador a mediano plazo: saca de la RAM a un proceso listo o bloqueado,
+     * lo pasa a su cola de suspendidos y libera su memoria.
+     */
+    public void suspender(Pcb proceso) {
+        mutex.acquireUninterruptibly();
+        try {
+            if (proceso != null && listos.contiene(proceso)) {
+                listos.eliminar(proceso);
+                proceso.suspender();
+                listosSuspendidos.encolar(proceso);
+            } else if (proceso != null && bloqueados.contiene(proceso)) {
+                bloqueados.eliminar(proceso);
+                proceso.suspender();
+                bloqueadosSuspendidos.agregarAlFinal(proceso);
+            } else {
+                throw new IllegalArgumentException("El proceso no esta listo ni bloqueado en el computador "
+                        + idComputador);
+            }
+            ram.liberar(proceso.getMemoria());
+            registrar(proceso.getEtiqueta() + " se suspende y libera " + proceso.getMemoria()
+                    + " MB (RAM " + ram + ")");
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /**
+     * Vuelve a cargar en la RAM a un proceso suspendido: listo/suspendido pasa a listos
+     * y bloqueado/suspendido a bloqueados. Devuelve false si no cabe en la RAM.
+     */
+    public boolean reactivar(Pcb proceso) {
+        mutex.acquireUninterruptibly();
+        try {
+            boolean estabaListo = proceso != null && listosSuspendidos.contiene(proceso);
+            boolean estabaBloqueado = proceso != null && bloqueadosSuspendidos.contiene(proceso);
+            if (!estabaListo && !estabaBloqueado) {
+                throw new IllegalArgumentException("El proceso no esta suspendido en el computador " + idComputador);
+            }
+            if (!ram.reservar(proceso.getMemoria())) {
+                return false;
+            }
+            proceso.reactivar();
+            if (estabaListo) {
+                listosSuspendidos.eliminar(proceso);
+                planificador.alEntrarAListos(listos, proceso);
+            } else {
+                bloqueadosSuspendidos.eliminar(proceso);
+                bloqueados.agregarAlFinal(proceso);
+            }
+            registrar(proceso.getEtiqueta() + " se reactiva y reserva " + proceso.getMemoria()
+                    + " MB (RAM " + ram + ")");
+            return true;
         } finally {
             mutex.release();
         }
@@ -219,6 +286,24 @@ public class Nucleo implements Relojable {
             mutex.release();
         }
     }
+    
+        public Pcb[] getListosSuspendidos() {
+        mutex.acquireUninterruptibly();
+        try {
+            return aArreglo(listosSuspendidos);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public Pcb[] getBloqueadosSuspendidos() {
+        mutex.acquireUninterruptibly();
+        try {
+            return aArreglo(bloqueadosSuspendidos);
+        } finally {
+            mutex.release();
+        }
+    }
  
     public Pcb[] getTerminados() {
         mutex.acquireUninterruptibly();
@@ -300,6 +385,13 @@ public class Nucleo implements Relojable {
         planificador.alEntrarAListos(listos, proceso);
         registrar(proceso.getEtiqueta() + " se desbloquea y pasa a listos");
     }
+    
+        /** El evento llega estando suspendido: sigue en el swap, pero ya esta listo. */
+    private void pasarAListosSuspendidos(Pcb proceso) {
+        proceso.desbloquear();
+        listosSuspendidos.encolar(proceso);
+        registrar(proceso.getEtiqueta() + " recibe su evento estando suspendido y pasa a listos/suspendidos");
+    }
  
     /** Los procesos cuya E/S ya termino dejan de estar bloqueados. */
     private void completarEntradasSalidas() {
@@ -309,6 +401,16 @@ public class Nucleo implements Relojable {
             if (p.getMotivoBloqueo() == MotivoBloqueo.ESPERA_ES && p.esTerminada(cicloActual)) {
                 bloqueados.eliminar(p);   // no se avanza i: el siguiente ocupo este lugar
                 pasarBloqueadoAListos(p);
+            } else {
+                i++;
+            }
+        }
+                i = 0;
+        while (i < bloqueadosSuspendidos.tamano()) {
+            Pcb p = bloqueadosSuspendidos.obtener(i);
+            if (p.getMotivoBloqueo() == MotivoBloqueo.ESPERA_ES && p.esTerminada(cicloActual)) {
+                bloqueadosSuspendidos.eliminar(p);
+                pasarAListosSuspendidos(p);
             } else {
                 i++;
             }
@@ -352,6 +454,26 @@ public class Nucleo implements Relojable {
             if (p.deadlineVencido(cicloActual)) {
                 nuevos.eliminar(p);
                 terminarPorDeadline(p, false);   // nunca tuvo memoria
+            } else {
+                i++;
+            }
+        }
+                i = 0;
+        while (i < listosSuspendidos.tamano()) {
+            Pcb p = listosSuspendidos.obtener(i);
+            if (p.deadlineVencido(cicloActual)) {
+                listosSuspendidos.eliminar(p);
+                terminarPorDeadline(p, false);   // esta en el swap: no tiene RAM
+            } else {
+                i++;
+            }
+        }
+        i = 0;
+        while (i < bloqueadosSuspendidos.tamano()) {
+            Pcb p = bloqueadosSuspendidos.obtener(i);
+            if (p.deadlineVencido(cicloActual)) {
+                bloqueadosSuspendidos.eliminar(p);
+                terminarPorDeadline(p, false);
             } else {
                 i++;
             }

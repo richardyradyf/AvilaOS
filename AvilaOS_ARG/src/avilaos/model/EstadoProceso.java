@@ -1,8 +1,10 @@
 package avilaos.model;
 
 /**
- * Estados por los que pasa un proceso de AvilaOS.
- * NUEVO -> LISTO -> EJECUCION -> TERMINADO, con EJECUCION <-> BLOQUEADO -> LISTO.
+ * Estados por los que pasa un proceso de AvilaOS (modelo de siete estados).
+ * NUEVO -> LISTO -> EJECUCION -> TERMINADO, con EJECUCION -> BLOQUEADO -> LISTO.
+ * Suspension: LISTO <-> LISTO_SUSPENDIDO y BLOQUEADO <-> BLOQUEADO_SUSPENDIDO;
+ * si ocurre el evento estando suspendido, BLOQUEADO_SUSPENDIDO -> LISTO_SUSPENDIDO.
  */
 public enum EstadoProceso {
 
