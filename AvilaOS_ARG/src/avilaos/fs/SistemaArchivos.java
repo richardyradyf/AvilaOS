@@ -1,5 +1,8 @@
 package avilaos.fs;
 
+import avilaos.model.TipoOperacionES;
+import avilaos.util.Iterador;
+import avilaos.util.Lista;
 import java.util.concurrent.Semaphore;
 
 /**
@@ -70,6 +73,24 @@ public class SistemaArchivos {
         return version;
     }
 
+    /** Todos los archivos del arbol (sin directorios), recorriendo desde la raiz. Para la tabla. */
+    public NodoFs[] archivos() {
+        mutex.acquireUninterruptibly();
+        try {
+            Lista<NodoFs> lista = new Lista<>();
+            juntarArchivos(raiz, lista);
+            NodoFs[] copia = new NodoFs[lista.tamano()];
+            Iterador<NodoFs> it = lista.iterador();
+            int i = 0;
+            while (it.tieneSiguiente()) {
+                copia[i++] = it.siguiente();
+            }
+            return copia;
+        } finally {
+            mutex.release();
+        }
+    }
+
     // ================= crear =================
 
     /** Crea un directorio vacio. No ocupa bloques. */
@@ -119,6 +140,157 @@ public class SistemaArchivos {
             version++;
             return ResultadoFs.ok("Archivo " + d.ruta + " creado: " + bloques
                     + " bloques desde el bloque " + primero);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    // ================= leer, renombrar, eliminar =================
+
+    /** Comprueba que el archivo o directorio exista (los archivos no tienen contenido). */
+    public ResultadoFs leer(String ruta) {
+        mutex.acquireUninterruptibly();
+        try {
+            NodoFs nodo = buscarSinMutex(ruta);
+            if (nodo == null) {
+                return ResultadoFs.error("No existe " + textoRuta(ruta));
+            }
+            if (nodo.esArchivo()) {
+                return ResultadoFs.ok("Archivo " + nodo.getRuta() + " leído: "
+                        + nodo.getCantidadBloques() + " bloques");
+            }
+            return ResultadoFs.ok("Directorio " + nodo.getRuta() + " leído: "
+                    + nodo.cantidadHijos() + " elementos");
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /**
+     * Cambia el nombre de un archivo o directorio. Como el ocupante de cada bloque es
+     * la ruta del archivo, se actualiza el mapa; si es un directorio, se actualizan
+     * recursivamente todos los archivos de adentro.
+     */
+    public ResultadoFs renombrar(String ruta, String nuevoNombre) {
+        mutex.acquireUninterruptibly();
+        try {
+            NodoFs nodo = buscarSinMutex(ruta);
+            if (nodo == null) {
+                return ResultadoFs.error("No existe " + textoRuta(ruta));
+            }
+            if (nodo.esRaiz()) {
+                return ResultadoFs.error("No se puede renombrar la raíz /");
+            }
+            String nuevo = nuevoNombre == null ? null : nuevoNombre.trim();
+            String errorNombre = validarNombre(nuevo);
+            if (errorNombre != null) {
+                return ResultadoFs.error(errorNombre);
+            }
+            NodoFs padre = nodo.getPadre();
+            if (padre.buscarHijo(nuevo) != null) {
+                return ResultadoFs.error("Ya existe " + rutaHija(padre, nuevo));
+            }
+            String rutaVieja = nodo.getRuta();
+            nodo.cambiarNombre(nuevo);
+            actualizarOcupantes(nodo);
+            version++;
+            return ResultadoFs.ok(rutaVieja + " renombrado a " + nodo.getRuta());
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /**
+     * Elimina un archivo (libera sus bloques) o un directorio completo: primero todos
+     * sus hijos, archivos y subdirectorios, y luego el directorio. La raiz no se elimina.
+     */
+    public ResultadoFs eliminar(String ruta) {
+        mutex.acquireUninterruptibly();
+        try {
+            NodoFs nodo = buscarSinMutex(ruta);
+            if (nodo == null) {
+                return ResultadoFs.error("No existe " + textoRuta(ruta));
+            }
+            if (nodo.esRaiz()) {
+                return ResultadoFs.error("No se puede eliminar la raíz /");
+            }
+            String rutaNodo = nodo.getRuta();
+            int archivosBorrados = contarArchivos(nodo);
+            int liberados = eliminarRecursivo(nodo);
+            nodo.getPadre().quitarHijo(nodo);
+            version++;
+            if (nodo.esArchivo()) {
+                return ResultadoFs.ok("Archivo " + rutaNodo + " eliminado: " + liberados + " bloques liberados");
+            }
+            return ResultadoFs.ok("Directorio " + rutaNodo + " eliminado con " + archivosBorrados
+                    + " archivos: " + liberados + " bloques liberados");
+        } finally {
+            mutex.release();
+        }
+    }
+
+    // ================= lo que pide el nucleo =================
+
+    /**
+     * Bloque al que debe ir el cabezal del disco para esta operacion.
+     * - LEER, ACTUALIZAR y ELIMINAR de un archivo: su primer bloque.
+     * - CREAR: el primer bloque libre, porque ahi empezara la asignacion.
+     * - Un directorio: el primer bloque del primer archivo que tenga dentro.
+     * Devuelve -1 si no hay bloque (directorio vacio, ruta inexistente, disco lleno):
+     * con -1 el disco no mueve el cabezal.
+     */
+    public int bloqueDestino(TipoOperacionES op, String ruta) {
+        if (op == null) {
+            return -1;
+        }
+        mutex.acquireUninterruptibly();
+        try {
+            switch (op) {
+                case CREAR:
+                    return mapa.primerLibre();
+                case LEER:
+                case ACTUALIZAR:
+                case ELIMINAR: {
+                    NodoFs nodo = buscarSinMutex(ruta);
+                    if (nodo == null) {
+                        return -1;
+                    }
+                    return nodo.esArchivo() ? nodo.getPrimerBloque() : primerBloqueDentro(nodo);
+                }
+                default:
+                    return -1;   // SUSPENDER y REACTIVAR no son operaciones del sistema de archivos
+            }
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /**
+     * Cantidad de bloques que transfiere el disco para esta operacion.
+     * - LEER de un archivo: todos sus bloques (de un directorio, 1).
+     * - CREAR: los bloques nuevos del archivo.
+     * - ACTUALIZAR y ELIMINAR: 1, porque solo se escriben metadatos.
+     * SUSPENDER y REACTIVAR devuelven 0: no son operaciones del sistema de archivos.
+     */
+    public int bloquesATransferir(TipoOperacionES op, String ruta, int bloquesNuevos) {
+        if (op == null) {
+            return 0;
+        }
+        mutex.acquireUninterruptibly();
+        try {
+            switch (op) {
+                case LEER: {
+                    NodoFs nodo = buscarSinMutex(ruta);
+                    return (nodo != null && nodo.esArchivo()) ? nodo.getCantidadBloques() : 1;
+                }
+                case CREAR:
+                    return Math.max(1, bloquesNuevos);
+                case ACTUALIZAR:
+                case ELIMINAR:
+                    return 1;
+                default:
+                    return 0;
+            }
         } finally {
             mutex.release();
         }
@@ -208,6 +380,73 @@ public class SistemaArchivos {
         d.nombre = nombre;
         d.ruta = limpia;
         return d;
+    }
+
+    /** Pone la ruta actual como ocupante de los bloques de cada archivo (al renombrar). */
+    private void actualizarOcupantes(NodoFs nodo) {
+        if (nodo.esArchivo()) {
+            mapa.cambiarOcupante(nodo.getPrimerBloque(), nodo.getRuta());
+            return;
+        }
+        for (NodoFs hijo : nodo.getHijos()) {
+            actualizarOcupantes(hijo);
+        }
+    }
+
+    /** Libera los bloques de un archivo o, si es directorio, de todo lo que tiene dentro. */
+    private int eliminarRecursivo(NodoFs nodo) {
+        if (nodo.esArchivo()) {
+            return mapa.liberar(nodo.getPrimerBloque());
+        }
+        int liberados = 0;
+        for (NodoFs hijo : nodo.getHijos()) {
+            liberados += eliminarRecursivo(hijo);
+            nodo.quitarHijo(hijo);
+        }
+        return liberados;
+    }
+
+    private int contarArchivos(NodoFs nodo) {
+        if (nodo.esArchivo()) {
+            return 1;
+        }
+        int cantidad = 0;
+        for (NodoFs hijo : nodo.getHijos()) {
+            cantidad += contarArchivos(hijo);
+        }
+        return cantidad;
+    }
+
+    /** Primer bloque del primer archivo que haya dentro del directorio, o -1 si no hay. */
+    private int primerBloqueDentro(NodoFs directorio) {
+        for (NodoFs hijo : directorio.getHijos()) {
+            if (hijo.esArchivo()) {
+                return hijo.getPrimerBloque();
+            }
+            int dentro = primerBloqueDentro(hijo);
+            if (dentro >= 0) {
+                return dentro;
+            }
+        }
+        return -1;
+    }
+
+    private void juntarArchivos(NodoFs nodo, Lista<NodoFs> destino) {
+        for (NodoFs hijo : nodo.getHijos()) {
+            if (hijo.esArchivo()) {
+                destino.agregarAlFinal(hijo);
+            } else {
+                juntarArchivos(hijo, destino);
+            }
+        }
+    }
+
+    private static String rutaHija(NodoFs padre, String nombre) {
+        return padre.esRaiz() ? "/" + nombre : padre.getRuta() + "/" + nombre;
+    }
+
+    private static String textoRuta(String ruta) {
+        return ruta == null || ruta.isBlank() ? "(ruta vacía)" : ruta.trim();
     }
 
     /** Devuelve null si el nombre es valido, o el mensaje que explica por que no. */
