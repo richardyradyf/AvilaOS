@@ -45,6 +45,7 @@ public class PruebaDisco {
         probarMovimientoYTransferenciaSimple();
         probarMultiplesSolicitudesConSstf();
         probarSaltoCScanYVelocidad();
+        probarMultiplesOyentes();
         probarCambioDePoliticaEnCaliente();
 
         System.out.println();
@@ -151,6 +152,27 @@ public class PruebaDisco {
         disco.alCiclo(4);
         verificar(oyente.llamadas == 1 && disco.getEstado() == EstadoDisco.OCIOSO,
                 "Ciclo 4: solicitud C-SCAN completada");
+    }
+
+    private static void probarMultiplesOyentes() {
+        System.out.println("--- Prueba: Multiples oyentes en Disco (Nucleo + Metricas) ---");
+        Disco disco = new Disco(200, new PoliticaFifo(), 0);
+        OyenteContador oyenteNucleo = new OyenteContador();
+        OyenteContador oyenteMetricas = new OyenteContador();
+
+        disco.agregarOyente(oyenteNucleo);
+        disco.agregarOyente(oyenteMetricas);
+
+        SolicitudDisco s = new SolicitudDisco(null, TipoOperacionES.LEER, "/compartido", 0, 1, 0);
+        disco.encolar(s);
+
+        // Ciclo 1: atiende y finaliza
+        disco.alCiclo(1);
+
+        verificar(oyenteNucleo.llamadas == 1, "Oyente nucleo recibio 1 aviso");
+        verificar(oyenteMetricas.llamadas == 1, "Oyente metricas recibio 1 aviso");
+        verificar(oyenteNucleo.ultimaAtendida == s && oyenteMetricas.ultimaAtendida == s,
+                "Ambos oyentes recibieron la misma solicitud");
     }
 
     private static void probarCambioDePoliticaEnCaliente() {

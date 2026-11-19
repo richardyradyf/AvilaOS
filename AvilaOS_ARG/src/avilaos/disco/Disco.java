@@ -30,11 +30,12 @@ public class Disco implements Relojable {
     private int totalBloques;
     private int velocidad;
     private final Lista<SolicitudDisco> cola;
+    private final Lista<OyenteDisco> oyentes;
     private final Semaphore semaforo;
 
     private PlanificacionDisco politica;
     private PlanificacionDisco politicaSolicitudActual;
-    private OyenteDisco oyente;
+    private PoliticaDisco politicaUltimaAtendida;
 
     private int cabezal;
     private DireccionCabezal direccion;
@@ -78,16 +79,39 @@ public class Disco implements Relojable {
         this.direccion = DireccionCabezal.ASCENDENTE;
         this.estado = EstadoDisco.OCIOSO;
         this.cola = new Lista<>();
+        this.oyentes = new Lista<>();
         this.semaforo = new Semaphore(1);
         this.solicitudActual = null;
+        this.politicaUltimaAtendida = null;
         this.bloquesRestantesTransferencia = 0;
         this.totalDesplazamiento = 0;
         this.totalSaltos = 0;
         this.totalSolicitudesAtendidas = 0;
     }
 
+    /**
+     * Agrega un nuevo oyente para recibir avisos cuando el disco termine solicitudes.
+     * Permite multiples oyentes (por ejemplo el nucleo y metricas simultaneamente).
+     */
+    public void agregarOyente(OyenteDisco oyente) {
+        if (oyente == null) {
+            throw new IllegalArgumentException("El oyente no puede ser nulo");
+        }
+        semaforo.acquireUninterruptibly();
+        try {
+            oyentes.agregarAlFinal(oyente);
+        } finally {
+            semaforo.release();
+        }
+    }
+
+    /**
+     * Define o reemplaza el oyente principal (mantiene compatibilidad, agrega a la lista).
+     */
     public void setOyente(OyenteDisco oyente) {
-        this.oyente = oyente;
+        if (oyente != null) {
+            agregarOyente(oyente);
+        }
     }
 
     /**
@@ -172,6 +196,7 @@ public class Disco implements Relojable {
             }
             this.politica = politicaInicial;
             this.politicaSolicitudActual = null;
+            this.politicaUltimaAtendida = null;
             this.cabezal = cabezalInicial;
             this.direccion = DireccionCabezal.ASCENDENTE;
             this.estado = EstadoDisco.OCIOSO;
@@ -222,6 +247,8 @@ public class Disco implements Relojable {
                     solicitudActual.setCicloFin(numeroCiclo);
                     totalSolicitudesAtendidas++;
                     finalizada = solicitudActual;
+                    politicaUltimaAtendida = (politicaSolicitudActual != null)
+                            ? politicaSolicitudActual.getTipo() : politica.getTipo();
                     solicitudActual = null;
                     politicaSolicitudActual = null;
                     estado = EstadoDisco.OCIOSO;
@@ -252,9 +279,27 @@ public class Disco implements Relojable {
             semaforo.release();
         }
 
-        // Notificar fuera del cerrojo para evitar bloqueos mutuos con el nucleo
-        if (finalizada != null && oyente != null) {
-            oyente.solicitudAtendida(finalizada, numeroCiclo);
+        // Notificar fuera del cerrojo a todos los oyentes para evitar interbloqueos
+        if (finalizada != null) {
+            notificarOyentes(finalizada, numeroCiclo);
+        }
+    }
+
+    private void notificarOyentes(SolicitudDisco finalizada, long numeroCiclo) {
+        Lista<OyenteDisco> copiaOyentes = new Lista<>();
+        semaforo.acquireUninterruptibly();
+        try {
+            Iterador<OyenteDisco> it = oyentes.iterador();
+            while (it.tieneSiguiente()) {
+                copiaOyentes.agregarAlFinal(it.siguiente());
+            }
+        } finally {
+            semaforo.release();
+        }
+
+        Iterador<OyenteDisco> it = copiaOyentes.iterador();
+        while (it.tieneSiguiente()) {
+            it.siguiente().solicitudAtendida(finalizada, numeroCiclo);
         }
     }
 
@@ -326,6 +371,18 @@ public class Disco implements Relojable {
         semaforo.acquireUninterruptibly();
         try {
             return politica.getTipo();
+        } finally {
+            semaforo.release();
+        }
+    }
+
+    /**
+     * Devuelve la politica con la que se atendio la ultima solicitud finalizada.
+     */
+    public PoliticaDisco getPoliticaUltimaAtendida() {
+        semaforo.acquireUninterruptibly();
+        try {
+            return politicaUltimaAtendida;
         } finally {
             semaforo.release();
         }

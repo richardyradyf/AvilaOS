@@ -51,7 +51,7 @@ public class MetricasDisco implements Relojable, OyenteDisco {
         this.totalAtendidas = 0;
 
         // Registrarse como oyente del disco para registrar cada solicitud atendida
-        disco.setOyente(this);
+        disco.agregarOyente(this);
     }
 
     @Override
@@ -75,7 +75,10 @@ public class MetricasDisco implements Relojable, OyenteDisco {
             }
             totalAtendidas++;
 
-            PoliticaDisco pol = disco.getTipoPolitica();
+            PoliticaDisco pol = disco.getPoliticaUltimaAtendida();
+            if (pol == null) {
+                pol = disco.getTipoPolitica();
+            }
             if (pol != null) {
                 atendidasPorPolitica[pol.ordinal()]++;
             }
