@@ -2,16 +2,24 @@ package avilaos.demo;
 
 import avilaos.disco.Disco;
 import avilaos.disco.PoliticaFifo;
+import avilaos.disco.PoliticaSstf;
+import avilaos.disco.SolicitudDisco;
 import avilaos.fs.MapaBloques;
+import avilaos.model.TipoOperacionES;
 import avilaos.gui.PaletaColores;
+import avilaos.gui.PanelColaDisco;
 import avilaos.gui.PanelDisco;
+import avilaos.gui.PanelGraficaDisco;
+import avilaos.metrics.MetricasDisco;
 
 /**
  * @author andre
  *
- * Pruebas unitarias de los componentes del Dia 6:
+ * Pruebas unitarias y de integracion de las vistas del disco (Dias 6 y 7):
  * - PaletaColores: constantes de colores definidas y validas.
- * - PanelDisco: inicializacion correcta, dimensiones de lienzo y refresco de estado.
+ * - PanelDisco: inicializacion correcta, dimensiones y refresco de estado.
+ * - PanelColaDisco: tabla de cola, controles de politica/velocidad y metricas.
+ * - PanelGraficaDisco: curva temporal y refresco con serie de desplazamiento.
  */
 public class PruebaVistasDisco {
 
@@ -21,9 +29,11 @@ public class PruebaVistasDisco {
     public static void main(String[] args) {
         probarPaletaColores();
         probarPanelDisco();
+        probarPanelColaDisco();
+        probarPanelGraficaDisco();
 
         System.out.println();
-        System.out.println("Pruebas Vistas Disco (Dia 6): " + total + ", fallos: " + fallos);
+        System.out.println("Pruebas Vistas Disco (Dias 6 y 7): " + total + ", fallos: " + fallos);
         System.out.println(fallos == 0 ? "TODO CORRECTO" : "HAY FALLOS: revisar lineas FALLO");
     }
 
@@ -46,9 +56,48 @@ public class PruebaVistasDisco {
         verificar(panel != null, "PanelDisco instanciado correctamente");
         verificar(panel.getComponentCount() > 0, "PanelDisco contiene componentes graficos");
 
-        // Simular actualizacion
         panel.actualizar();
-        verificar(true, "actualizar() ejecuta sin excepciones");
+        verificar(true, "actualizar() en PanelDisco ejecuta sin excepciones");
+    }
+
+    private static void probarPanelColaDisco() {
+        System.out.println("--- Prueba: PanelColaDisco ---");
+        Disco disco = new Disco(250, new PoliticaFifo(), 53);
+        MetricasDisco metricas = new MetricasDisco(disco);
+        PanelColaDisco panel = new PanelColaDisco(disco, metricas);
+
+        verificar(panel != null, "PanelColaDisco instanciado correctamente");
+        verificar(panel.getComponentCount() > 0, "PanelColaDisco contiene controles y tabla");
+
+        // Encolar solicitudes y refrescar
+        disco.encolar(new SolicitudDisco(null, TipoOperacionES.LEER, "/test.txt", 98, 1, 1));
+        disco.encolar(new SolicitudDisco(null, TipoOperacionES.ACTUALIZAR, "/swap.bin", 210, 1, 1));
+        panel.actualizar();
+        verificar(true, "actualizar() con solicitudes encola ejecuta sin excepciones");
+
+        // Cambio de politica
+        disco.setPolitica(new PoliticaSstf());
+        panel.actualizar();
+        verificar(true, "actualizar() tras cambio de politica en caliente ejecuta correctamente");
+    }
+
+    private static void probarPanelGraficaDisco() {
+        System.out.println("--- Prueba: PanelGraficaDisco ---");
+        Disco disco = new Disco(250, new PoliticaFifo(), 53);
+        MetricasDisco metricas = new MetricasDisco(disco);
+        PanelGraficaDisco panel = new PanelGraficaDisco(metricas);
+
+        verificar(panel != null, "PanelGraficaDisco instanciado correctamente");
+
+        // Simular ciclos y actualizar
+        disco.encolar(new SolicitudDisco(null, TipoOperacionES.LEER, "/a.bin", 100, 1, 1));
+        for (long c = 1; c <= 10; c++) {
+            disco.alCiclo(c);
+            metricas.alCiclo(c);
+        }
+        panel.actualizar();
+        verificar(metricas.getSerieDesplazamiento().tamano() > 0, "Serie temporal registro puntos");
+        verificar(true, "actualizar() en PanelGraficaDisco ejecuta sin excepciones");
     }
 
     private static void verificar(boolean condicion, String descripcion) {
