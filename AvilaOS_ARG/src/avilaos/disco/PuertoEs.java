@@ -25,4 +25,12 @@ public interface PuertoEs {
      * @return la solicitud que se encolo
      */
     SolicitudDisco pedirDisco(Pcb proceso, long ciclo);
+    
+    /**
+     * Hace en el sistema de archivos la operacion de una solicitud que el disco ya
+     * atendio (crear, leer, renombrar o eliminar).
+     *
+     * @return el mensaje para la bitacora, empieza con "OK" o con "ERROR"
+     */
+    String completarOperacion(SolicitudDisco solicitud);
 }

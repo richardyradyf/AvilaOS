@@ -38,6 +38,7 @@ public class PruebaProcesosEs {
     /** Puerto falso: guarda la ultima solicitud y cuenta cuantas recibio. */
     private static class PuertoFalso implements PuertoEs {
         int pedidos = 0;
+        int completadas = 0;
         SolicitudDisco ultima;
 
         @Override
@@ -46,6 +47,12 @@ public class PruebaProcesosEs {
             int bloques = proceso.getOperacion() == TipoOperacionES.CREAR ? proceso.getBloquesNuevos() : 1;
             ultima = new SolicitudDisco(proceso, proceso.getOperacion(), proceso.getRuta(), 87, bloques, ciclo);
             return ultima;
+        }
+        
+        @Override
+        public String completarOperacion(SolicitudDisco solicitud) {
+            completadas++;
+            return "OK - operacion falsa";
         }
     }
 
@@ -133,6 +140,7 @@ public class PruebaProcesosEs {
         verificar(s.avanzarHasta(p, EstadoProceso.TERMINADO, 20) && !p.isTerminadoPorDeadline(),
                 "termina sus instrucciones");
         verificar(s.puerto.pedidos == 1, "pide el disco una sola vez");
+        verificar(s.puerto.completadas == 1, "la operacion se hace una sola vez, al llegar el aviso");
         verificar(s.ram.getUsada() == 0, "al terminar libera la memoria");
         verificar(s.bitacora.contiene("pide el disco") && s.bitacora.contiene("el disco atendio"),
                 "la bitacora registra el pedido y el aviso");
@@ -178,6 +186,7 @@ public class PruebaProcesosEs {
         SolicitudDisco vieja = s.puerto.ultima;
         verificar(!lanza(() -> s.nucleo.solicitudAtendida(vieja, 21)),
                 "un aviso repetido se ignora sin error");
+        verificar(s.puerto.completadas == 1, "el aviso repetido no repite la operacion");
         verificar(!lanza(() -> s.nucleo.solicitudAtendida(
                 new SolicitudDisco(null, TipoOperacionES.LEER, "/c", 3, 1, 0), 22)),
                 "un aviso sin proceso (del sistema) se ignora");

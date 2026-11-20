@@ -225,8 +225,7 @@ public class Nucleo implements Relojable, OyenteDisco {
         mutex.acquireUninterruptibly();
         try {
             if (bloqueados.eliminar(proceso)) {
-                registrar(proceso.getEtiqueta() + ": el disco atendio " + solicitud.getOperacion()
-                        + " " + solicitud.getRuta());
+                completarOperacion(proceso, solicitud);
                 proceso.desbloquear();
                 if (proceso.completoSusInstrucciones()) {
                     proceso.terminar(ciclo, false);
@@ -239,11 +238,19 @@ public class Nucleo implements Relojable, OyenteDisco {
                     registrar(proceso.getEtiqueta() + " se desbloquea y pasa a listos");
                 }
             } else if (bloqueadosSuspendidos.eliminar(proceso)) {
+                completarOperacion(proceso, solicitud);
                 pasarAListosSuspendidos(proceso);
             }
         } finally {
             mutex.release();
         }
+    }
+        
+    /** Hace la operacion en el sistema de archivos y anota el resultado en la bitacora. */
+    private void completarOperacion(Pcb proceso, SolicitudDisco solicitud) {
+        String resultado = puertoEs != null ? puertoEs.completarOperacion(solicitud) : "sin sistema de archivos";
+        registrar(proceso.getEtiqueta() + ": el disco atendio " + solicitud.getOperacion()
+                + " " + solicitud.getRuta() + " -> " + resultado);
     }
     
     /**
