@@ -257,7 +257,41 @@ public class MapaBloques {
             mutex.release();
         }
     }
-
+        /**
+     * Asigna exactamente los bloques indicados, en ese orden, encadenados entre si.
+     * Se usa al cargar del JSON un archivo guardado con "chain" (o contiguo). Devuelve
+     * el primer bloque, o -1 si algun bloque se sale del area de archivos, esta ocupado
+     * o esta repetido; en ese caso no se asigna nada.
+     */
+    int asignarCadena(int[] cadena, String ocupante) {
+        if (cadena == null || cadena.length == 0) {
+            throw new IllegalArgumentException("La cadena debe tener al menos 1 bloque");
+        }
+        validarPedido(cadena.length, ocupante);
+        mutex.acquireUninterruptibly();
+        try {
+            for (int i = 0; i < cadena.length; i++) {
+                int b = cadena[i];
+                if (b < 0 || b >= bloquesArchivos || !bloques[b].estaLibre()) {
+                    return -1;
+                }
+                for (int j = 0; j < i; j++) {
+                    if (cadena[j] == b) {
+                        return -1;
+                    }
+                }
+            }
+            for (int i = 0; i < cadena.length; i++) {
+                bloques[cadena[i]].ocupar(ocupante);
+                if (i > 0) {
+                    bloques[cadena[i - 1]].setSiguiente(cadena[i]);
+                }
+            }
+            return cadena[0];
+        } finally {
+            mutex.release();
+        }
+    }
     /**
      * Libera un archivo del area de archivos recorriendo su cadena.
      *

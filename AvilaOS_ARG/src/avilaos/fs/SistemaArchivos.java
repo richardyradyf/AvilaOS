@@ -296,6 +296,65 @@ public class SistemaArchivos {
         }
     }
 
+    
+        // ================= carga desde JSON (solo CargadorSistemaArchivos) =================
+
+    /**
+     * Crea un archivo que ya trae sus bloques exactos (del JSON). Valida igual que
+     * crearArchivo; el proceso creador queda como "sistema".
+     */
+    ResultadoFs cargarArchivo(String ruta, int[] cadena, String dueno, Permiso permiso) {
+        mutex.acquireUninterruptibly();
+        try {
+            Destino d = prepararCreacion(ruta, dueno, permiso);
+            if (d.error != null) {
+                return ResultadoFs.error(d.error);
+            }
+            if (cadena == null || cadena.length == 0) {
+                return ResultadoFs.error("El archivo " + d.ruta + " necesita al menos 1 bloque");
+            }
+            int primero = mapa.asignarCadena(cadena, d.ruta);
+            if (primero < 0) {
+                return ResultadoFs.error("Los bloques de " + d.ruta
+                        + " se solapan con otro archivo o se salen del área de archivos");
+            }
+            NodoFs nuevo = NodoFs.nuevoArchivo(d.nombre, d.padre, dueno.trim(), permiso, primero,
+                    cadena.length, NodoFs.CREADOR_SISTEMA);
+            d.padre.agregarHijo(nuevo);
+            version++;
+            return ResultadoFs.ok("Archivo " + d.ruta + " cargado: " + cadena.length
+                    + " bloques desde el bloque " + primero);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** Todos los nodos (sin la raiz), cada directorio antes que su contenido. Para guardar. */
+    NodoFs[] todosLosNodos() {
+        mutex.acquireUninterruptibly();
+        try {
+            Lista<NodoFs> lista = new Lista<>();
+            juntarNodos(raiz, lista);
+            NodoFs[] copia = new NodoFs[lista.tamano()];
+            Iterador<NodoFs> it = lista.iterador();
+            int i = 0;
+            while (it.tieneSiguiente()) {
+                copia[i++] = it.siguiente();
+            }
+            return copia;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    private void juntarNodos(NodoFs nodo, Lista<NodoFs> destino) {
+        for (NodoFs hijo : nodo.getHijos()) {
+            destino.agregarAlFinal(hijo);
+            if (hijo.esDirectorio()) {
+                juntarNodos(hijo, destino);
+            }
+        }
+    }
     // ================= privados (el mutex ya esta tomado) =================
 
     /** Recorre el arbol desde la raiz siguiendo cada parte de la ruta. */
