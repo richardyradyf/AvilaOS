@@ -50,6 +50,10 @@ public class Pcb {
     private String nuevoNombre;
     private String usuario = "admin";
     private boolean discoPedido;
+    
+    // ---- area de intercambio (Proyecto 2) ----
+    private int bloqueSwap = -1;
+    private boolean escribiendoSwap;
  
     /**
      * Crea un proceso en estado NUEVO. El ID se genera dentro, despues de validar,
@@ -291,6 +295,24 @@ public class Pcb {
 
     public String getUsuario() {
         return usuario;
+    }
+    
+    /** Primer bloque del proceso en el swap, o -1 si no tiene. */
+    public int getBloqueSwap() {
+        return bloqueSwap;
+    }
+
+    public void setBloqueSwap(int bloqueSwap) {
+        this.bloqueSwap = bloqueSwap;
+    }
+
+    /** True mientras el disco no termina de escribir al proceso en el swap. */
+    public boolean isEscribiendoSwap() {
+        return escribiendoSwap;
+    }
+
+    public void setEscribiendoSwap(boolean escribiendoSwap) {
+        this.escribiendoSwap = escribiendoSwap;
     }
  
     /** True si acaba de ejecutar la instruccion que dispara una E/S y todavia le quedan instrucciones. */
