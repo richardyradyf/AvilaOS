@@ -28,6 +28,10 @@ public class ControladorSimulador implements AccionesUsuario, ControlSimulacion 
     @Override
     public String crearProceso(SolicitudProceso s) {
         try {
+            if (s.esDeEs()) {
+                cluster.crearProcesoArchivo(s);
+                return null;
+            }
             switch (s.getTipo()) {
                 case CPU_BOUND:
                     cluster.crearProceso(s.getIdComputador(), s.getNombre(), s.getTipo(),

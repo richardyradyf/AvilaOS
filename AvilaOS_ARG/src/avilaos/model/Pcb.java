@@ -42,6 +42,14 @@ public class Pcb {
     private int instruccionesEntreEs;
     private int ciclosEs;
     private long cicloFinEs;
+    
+    // ---- proceso de E/S sobre un archivo (Proyecto 2) ----
+    private TipoOperacionES operacion;
+    private String ruta;
+    private int bloquesNuevos;
+    private String nuevoNombre;
+    private String usuario = "admin";
+    private boolean discoPedido;
  
     /**
      * Crea un proceso en estado NUEVO. El ID se genera dentro, despues de validar,
@@ -228,6 +236,61 @@ public class Pcb {
         }
         this.instruccionesEntreEs = cadaInstrucciones;
         this.ciclosEs = ciclos;
+    }
+    
+    
+    /**
+     * Convierte al proceso en uno de E/S sobre un archivo (crear, leer, actualizar o
+     * eliminar). Se llama antes de agregarlo al nucleo.
+     */
+    public void configurarArchivo(TipoOperacionES operacion, String ruta, int bloquesNuevos,
+                                  String nuevoNombre, String usuario) {
+        if (operacion == null || !operacion.esDeArchivo()) {
+            throw new IllegalArgumentException("La operacion de un proceso de E/S debe ser CRUD");
+        }
+        if (ruta == null || ruta.isBlank()) {
+            throw new IllegalArgumentException("Un proceso de E/S necesita la ruta del archivo");
+        }
+        exigirEstado(EstadoProceso.NUEVO, "configurar la operacion de archivo");
+        this.operacion = operacion;
+        this.ruta = ruta;
+        this.bloquesNuevos = bloquesNuevos;
+        this.nuevoNombre = nuevoNombre;
+        this.usuario = (usuario == null || usuario.isBlank()) ? "admin" : usuario;
+    }
+
+    /** true si es un proceso de E/S sobre un archivo. */
+    public boolean esDeArchivo() {
+        return operacion != null;
+    }
+
+    /** true si ya mando su solicitud al disco (cada proceso de E/S la manda una sola vez). */
+    public boolean yaPidioDisco() {
+        return discoPedido;
+    }
+
+    public void marcarDiscoPedido() {
+        discoPedido = true;
+    }
+
+    public TipoOperacionES getOperacion() {
+        return operacion;
+    }
+
+    public String getRuta() {
+        return ruta;
+    }
+
+    public int getBloquesNuevos() {
+        return bloquesNuevos;
+    }
+
+    public String getNuevoNombre() {
+        return nuevoNombre;
+    }
+
+    public String getUsuario() {
+        return usuario;
     }
  
     /** True si acaba de ejecutar la instruccion que dispara una E/S y todavia le quedan instrucciones. */
