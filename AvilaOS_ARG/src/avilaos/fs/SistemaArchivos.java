@@ -330,7 +330,7 @@ public class SistemaArchivos {
     }
 
     /** Todos los nodos (sin la raiz), cada directorio antes que su contenido. Para guardar. */
-    NodoFs[] todosLosNodos() {
+    public NodoFs[] todosLosNodos() {
         mutex.acquireUninterruptibly();
         try {
             Lista<NodoFs> lista = new Lista<>();
