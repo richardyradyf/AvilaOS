@@ -160,7 +160,12 @@ public class PruebaPuertoEsArchivos {
                 "crear un archivo que ya existe falla y no cambia el original");
         Pcb r = s.correr("SinNombre", TipoOperacionES.ACTUALIZAR, "/docs/a.txt", 0, null, null);
         verificar(r.getEstado() == EstadoProceso.TERMINADO && s.fs.buscar("/docs/a.txt") != null,
-                "renombrar sin nombre nuevo falla sin romper nada");
+                "actualizar sin nombre nuevo conserva el archivo");
+        verificar(s.bitacora.contiene("OK - Metadatos de /docs/a.txt actualizados"),
+                "actualizar sin nombre nuevo escribe los metadatos");
+        s.correr("SinRuta", TipoOperacionES.ACTUALIZAR, "/no/otro.txt", 0, null, null);
+        verificar(s.bitacora.contiene("/no/otro.txt -> ERROR - No existe"),
+                "actualizar una ruta que no existe da error");
     }
 
     private static void probarSuspendido() {

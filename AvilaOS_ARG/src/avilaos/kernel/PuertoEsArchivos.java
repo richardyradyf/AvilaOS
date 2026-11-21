@@ -63,7 +63,7 @@ public class PuertoEsArchivos implements PuertoEs {
                 resultado = sistemaArchivos.leer(ruta);
                 break;
             case ACTUALIZAR:
-                resultado = sistemaArchivos.renombrar(ruta, proceso.getNuevoNombre());
+                resultado = actualizar(ruta, proceso.getNuevoNombre());
                 break;
             case ELIMINAR:
                 resultado = sistemaArchivos.eliminar(ruta);
@@ -72,5 +72,17 @@ public class PuertoEsArchivos implements PuertoEs {
                 return "ERROR - " + solicitud.getOperacion() + " no es una operacion de archivo";
         }
         return (resultado.isExito() ? "OK - " : "ERROR - ") + resultado.getMensaje();
+    }
+
+    /**
+     * Con nombre nuevo, renombra. Sin nombre nuevo (como los UPDATE del JSON del
+     * enunciado) solo se escriben los metadatos: basta con que la ruta exista.
+     */
+    private ResultadoFs actualizar(String ruta, String nuevoNombre) {
+        if (nuevoNombre != null && !nuevoNombre.isBlank()) {
+            return sistemaArchivos.renombrar(ruta, nuevoNombre);
+        }
+        ResultadoFs existe = sistemaArchivos.leer(ruta);
+        return existe.isExito() ? ResultadoFs.ok("Metadatos de " + ruta + " actualizados") : existe;
     }
 }
