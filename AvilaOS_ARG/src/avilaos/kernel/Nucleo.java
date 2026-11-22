@@ -158,8 +158,9 @@ public class Nucleo implements Relojable, OyenteDisco {
     }
 
     /**
-     * Vuelve a cargar en la RAM a un proceso suspendido: listo/suspendido pasa a listos
-     * y bloqueado/suspendido a bloqueados. Devuelve false si no cabe en la RAM.
+     * Vuelve a cargar en la RAM a un proceso suspendido. Con swap conectado, reserva su
+     * memoria y pide leerlo por la cola del disco. Devuelve false si no cabe en la RAM
+     * o si el disco todavia lo esta moviendo.
      */
     public boolean reactivar(Pcb proceso) {
         mutex.acquireUninterruptibly();
@@ -169,20 +170,7 @@ public class Nucleo implements Relojable, OyenteDisco {
             if (!estabaListo && !estabaBloqueado) {
                 throw new IllegalArgumentException("El proceso no esta suspendido en el computador " + idComputador);
             }
-            if (!ram.reservar(proceso.getMemoria())) {
-                return false;
-            }
-            proceso.reactivar();
-            if (estabaListo) {
-                listosSuspendidos.eliminar(proceso);
-                planificador.alEntrarAListos(listos, proceso);
-            } else {
-                bloqueadosSuspendidos.eliminar(proceso);
-                bloqueados.agregarAlFinal(proceso);
-            }
-            registrar(proceso.getEtiqueta() + " se reactiva y reserva " + proceso.getMemoria()
-                    + " MB (RAM " + ram + ")");
-            return true;
+            return reactivarProceso(proceso);
         } finally {
             mutex.release();
         }
@@ -217,6 +205,11 @@ public class Nucleo implements Relojable, OyenteDisco {
         try {
             if (solicitud.getOperacion() == TipoOperacionES.SUSPENDER) {
                 terminarEscrituraSwap(proceso);
+                admitirPendientes();
+                return;
+            }
+            if (solicitud.getOperacion() == TipoOperacionES.REACTIVAR) {
+                terminarLecturaSwap(proceso);
                 admitirPendientes();
                 return;
             }
@@ -520,6 +513,65 @@ public class Nucleo implements Relojable, OyenteDisco {
             puertoSwap.liberarSwap(proceso);
         }
     }
+    
+        /** Reserva la RAM del proceso y, si esta en el swap, pide leerlo por la cola del disco. */
+    private boolean reactivarProceso(Pcb proceso) {
+        if (proceso.isEscribiendoSwap() || proceso.isLeyendoSwap() || !ram.reservar(proceso.getMemoria())) {
+            return false;
+        }
+        if (puertoSwap != null && proceso.getBloqueSwap() >= 0) {
+            proceso.setLeyendoSwap(true);
+            puertoSwap.leerDeSwap(proceso, cicloActual);
+            registrar(proceso.getEtiqueta() + " reserva " + proceso.getMemoria()
+                    + " MB y se lee del swap desde el bloque " + proceso.getBloqueSwap());
+        } else {
+            cargarEnRam(proceso);
+        }
+        return true;
+    }
+
+    /** El proceso ya esta en la RAM: vuelve a listos o a bloqueados segun su estado. */
+    private void cargarEnRam(Pcb proceso) {
+        boolean estabaListo = listosSuspendidos.eliminar(proceso);
+        if (!estabaListo) {
+            bloqueadosSuspendidos.eliminar(proceso);
+        }
+        proceso.reactivar();
+        if (estabaListo) {
+            planificador.alEntrarAListos(listos, proceso);
+        } else {
+            bloqueados.agregarAlFinal(proceso);
+        }
+        registrar(proceso.getEtiqueta() + " se reactiva y ocupa " + proceso.getMemoria()
+                + " MB (RAM " + ram + ")");
+    }
+
+    /** El disco termino de leer al proceso: libera su swap y entra a la RAM. */
+    private void terminarLecturaSwap(Pcb proceso) {
+        proceso.setLeyendoSwap(false);
+        puertoSwap.liberarSwap(proceso);
+        if (proceso.getEstado() == EstadoProceso.TERMINADO) {
+            ram.liberar(proceso.getMemoria());
+            registrar(proceso.getEtiqueta() + " ya habia terminado y libera " + proceso.getMemoria() + " MB");
+        } else {
+            cargarEnRam(proceso);
+        }
+    }
+
+    /**
+     * Al haber RAM, reactiva a los listos/suspendidos en orden de llegada. Mientras se
+     * esta haciendo espacio para un proceso nuevo no reactiva a nadie: asi no se trae de
+     * vuelta al mismo proceso que se acaba de sacar.
+     */
+    private void reactivarPendientes() {
+        if (puertoSwap == null || (nuevos.tamano() > 0 && ramPorLiberar > 0)) {
+            return;
+        }
+        Pcb[] candidatos = aArreglo(listosSuspendidos);
+        for (Pcb p : candidatos) {
+            reactivarProceso(p);
+        }
+    }
 
     /** Un proceso en el swap ya hizo todo su trabajo: termina sin pasar por la RAM. */
     private void terminarSuspendido(Pcb proceso, long ciclo) {
@@ -530,9 +582,9 @@ public class Nucleo implements Relojable, OyenteDisco {
         registrar(proceso.getEtiqueta() + " termina estando suspendido");
     }
 
-    /** Libera el swap de un proceso terminado, salvo que el disco aun lo este escribiendo. */
+    /** Libera el swap de un proceso terminado, salvo que el disco aun lo este usando. */
     private void soltarSwap(Pcb proceso) {
-        if (puertoSwap != null && !proceso.isEscribiendoSwap()) {
+        if (puertoSwap != null && !proceso.isEscribiendoSwap() && !proceso.isLeyendoSwap()) {
             puertoSwap.liberarSwap(proceso);
         }
     }
@@ -715,6 +767,7 @@ public class Nucleo implements Relojable, OyenteDisco {
             }
         }
         planificarMedianoPlazo();
+        reactivarPendientes();
     }
  
     /** Planificacion a corto plazo: si la CPU esta libre, carga el proximo proceso. */
