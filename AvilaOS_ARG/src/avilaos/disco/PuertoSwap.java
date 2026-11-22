@@ -23,6 +23,9 @@ public interface PuertoSwap {
      */
     SolicitudDisco escribirEnSwap(Pcb proceso, long ciclo);
 
+    /** Pone en la cola del disco la solicitud REACTIVAR que lee al proceso desde el swap. */
+    SolicitudDisco leerDeSwap(Pcb proceso, long ciclo);
+
     /** Libera los bloques de swap del proceso, si tiene. */
     void liberarSwap(Pcb proceso);
 }

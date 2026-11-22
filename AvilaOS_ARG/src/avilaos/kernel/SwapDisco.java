@@ -45,6 +45,13 @@ public class SwapDisco implements PuertoSwap {
         disco.encolar(solicitud);
         return solicitud;
     }
+    @Override
+    public SolicitudDisco leerDeSwap(Pcb proceso, long ciclo) {
+        SolicitudDisco solicitud = new SolicitudDisco(proceso, TipoOperacionES.REACTIVAR,
+                "swap:" + proceso.getEtiqueta(), proceso.getBloqueSwap(), proceso.getMemoria(), ciclo);
+        disco.encolar(solicitud);
+        return solicitud;
+    }
 
     @Override
     public void liberarSwap(Pcb proceso) {
