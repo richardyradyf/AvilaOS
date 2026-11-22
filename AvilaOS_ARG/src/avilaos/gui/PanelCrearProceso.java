@@ -3,6 +3,7 @@ package avilaos.gui;
 import avilaos.config.EntradaInvalidaException;
 import avilaos.config.ValidadorEntradas;
 import avilaos.model.SolicitudProceso;
+import avilaos.model.TipoOperacionES;
 import avilaos.model.TipoProceso;
 import java.awt.Color;
 import java.awt.FlowLayout;
@@ -34,6 +35,12 @@ public class PanelCrearProceso extends JPanel {
     private final JTextField campoDeadline = new JTextField(10);
     private final JTextField campoCiclosEs = new JTextField(10);
     private final JTextField campoCadaCiclos = new JTextField(10);
+    private final JComboBox<Object> comboOperacion = new JComboBox<>(new Object[]{"Ninguna",
+        TipoOperacionES.CREAR, TipoOperacionES.LEER, TipoOperacionES.ACTUALIZAR, TipoOperacionES.ELIMINAR});
+    private final JTextField campoRuta = new JTextField(20);
+    private final JTextField campoBloques = new JTextField(10);
+    private final JTextField campoNuevoNombre = new JTextField(20);
+    private final JTextField campoUsuario = new JTextField(20);
     private final JLabel etiquetaMensaje = new JLabel(" ");
 
     private int fila = 0;
@@ -50,6 +57,11 @@ public class PanelCrearProceso extends JPanel {
         agregarFila("Deadline (ciclos desde la creación)", campoDeadline);
         agregarFila("Ciclos de cada E/S (I/O bound)", campoCiclosEs);
         agregarFila("Cada cuántas instrucciones pide E/S (I/O bound)", campoCadaCiclos);
+        agregarFila("Operación sobre archivo", comboOperacion);
+        agregarFila("Ruta (ej. /docs/a.txt)", campoRuta);
+        agregarFila("Bloques (solo Crear)", campoBloques);
+        agregarFila("Nombre nuevo (opcional, solo Actualizar)", campoNuevoNombre);
+        agregarFila("Usuario (opcional, por defecto admin)", campoUsuario);
 
         JButton botonCrear = new JButton("Crear proceso");
         botonCrear.addActionListener(e -> crear());
@@ -77,6 +89,7 @@ public class PanelCrearProceso extends JPanel {
         add(etiquetaMensaje, c);
 
         comboTipo.addActionListener(e -> actualizarCamposSegunTipo());
+        comboOperacion.addActionListener(e -> actualizarCamposSegunTipo());
         actualizarCamposSegunTipo();
     }
 
@@ -93,22 +106,47 @@ public class PanelCrearProceso extends JPanel {
         add(campo, c);
     }
 
+    /** La operacion elegida, o null si el proceso no trabaja con archivos. */
+    private TipoOperacionES operacionElegida() {
+        Object elegido = comboOperacion.getSelectedItem();
+        return elegido instanceof TipoOperacionES ? (TipoOperacionES) elegido : null;
+    }
+
     private void actualizarCamposSegunTipo() {
+        TipoOperacionES operacion = operacionElegida();
+        boolean esArchivo = operacion != null;
+        if (esArchivo && comboTipo.getSelectedItem() != TipoProceso.IO_BOUND) {
+            comboTipo.setSelectedItem(TipoProceso.IO_BOUND);
+        }
         boolean esIo = comboTipo.getSelectedItem() == TipoProceso.IO_BOUND;
-        campoCiclosEs.setEnabled(esIo);
-        campoCadaCiclos.setEnabled(esIo);
+        comboTipo.setEnabled(!esArchivo);
+        campoCiclosEs.setEnabled(esIo && !esArchivo);
+        campoCadaCiclos.setEnabled(esIo && !esArchivo);
+        campoRuta.setEnabled(esArchivo);
+        campoBloques.setEnabled(operacion == TipoOperacionES.CREAR);
+        campoNuevoNombre.setEnabled(operacion == TipoOperacionES.ACTUALIZAR);
+        campoUsuario.setEnabled(esArchivo);
+    }
+
+    private SolicitudProceso leerSolicitud() {
+        TipoOperacionES operacion = operacionElegida();
+        if (operacion != null) {
+            return ValidadorEntradas.validarProcesoEs(campoNombre.getText(), campoInstrucciones.getText(),
+                    campoMemoria.getText(), campoPrioridad.getText(), campoDeadline.getText(), operacion,
+                    campoRuta.getText(), campoBloques.getText(), campoNuevoNombre.getText(),
+                    campoUsuario.getText());
+        }
+        int idComputador = 1;
+        return ValidadorEntradas.validarProceso(
+                campoNombre.getText(), (TipoProceso) comboTipo.getSelectedItem(),
+                campoInstrucciones.getText(), campoMemoria.getText(), campoPrioridad.getText(),
+                campoDeadline.getText(), idComputador, campoCiclosEs.getText(),
+                campoCadaCiclos.getText(), "", 0);
     }
 
     private void crear() {
         try {
-            int idComputador = 1;
-
-            SolicitudProceso solicitud = ValidadorEntradas.validarProceso(
-                    campoNombre.getText(), (TipoProceso) comboTipo.getSelectedItem(),
-                    campoInstrucciones.getText(), campoMemoria.getText(), campoPrioridad.getText(),
-                    campoDeadline.getText(), idComputador, campoCiclosEs.getText(),
-                    campoCadaCiclos.getText(), "", 0);
-
+            SolicitudProceso solicitud = leerSolicitud();
             String error = acciones.crearProceso(solicitud);
             if (error != null) {
                 mostrarMensaje(error, true);
@@ -131,6 +169,11 @@ public class PanelCrearProceso extends JPanel {
         campoDeadline.setText("");
         campoCiclosEs.setText("");
         campoCadaCiclos.setText("");
+        campoRuta.setText("");
+        campoBloques.setText("");
+        campoNuevoNombre.setText("");
+        campoUsuario.setText("");
+        comboOperacion.setSelectedIndex(0);
         comboTipo.setSelectedIndex(0);
     }
 
