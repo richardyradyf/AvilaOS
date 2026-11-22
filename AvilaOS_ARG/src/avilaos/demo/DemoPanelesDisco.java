@@ -1,13 +1,20 @@
 package avilaos.demo;
 
+import avilaos.config.ConfiguracionProcesos;
 import avilaos.disco.Disco;
 import avilaos.disco.PoliticaFifo;
 import avilaos.disco.SolicitudDisco;
+import avilaos.fs.CargadorSistemaArchivos;
+import avilaos.fs.EstadoDiscoInicial;
 import avilaos.fs.MapaBloques;
+import avilaos.fs.SistemaArchivos;
 import avilaos.model.Pcb;
+import avilaos.model.SolicitudProceso;
 import avilaos.model.TipoOperacionES;
 import avilaos.model.TipoProceso;
+import avilaos.gui.AccionesCarga;
 import avilaos.gui.PaletaColores;
+import avilaos.gui.PanelCarga;
 import avilaos.gui.PanelColaDisco;
 import avilaos.gui.PanelDisco;
 import avilaos.gui.PanelGraficaDisco;
@@ -16,6 +23,9 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Random;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -44,9 +54,12 @@ public class DemoPanelesDisco extends JFrame {
     private final MetricasDisco metricas;
     private final MapaBloques mapa;
 
+    private final PanelCarga panelCarga;
     private final PanelDisco panelDisco;
     private final PanelColaDisco panelCola;
     private final PanelGraficaDisco panelGrafica;
+
+    private SistemaArchivos fsActual = null;
 
     private final JLabel lblCiclo;
     private final JButton btnPlayPausa;
@@ -72,6 +85,7 @@ public class DemoPanelesDisco extends JFrame {
         metricas = new MetricasDisco(disco);
 
         // 2. Componentes graficos
+        panelCarga = new PanelCarga(new AccionesCargaDemo());
         panelDisco = new PanelDisco(disco, mapa);
         panelCola = new PanelColaDisco(disco, metricas);
         panelGrafica = new PanelGraficaDisco(metricas);
@@ -121,6 +135,9 @@ public class DemoPanelesDisco extends JFrame {
         // 4. Distribucion de paneles
         JPanel panelContenedor = new JPanel();
         panelContenedor.setLayout(new BoxLayout(panelContenedor, BoxLayout.Y_AXIS));
+
+        panelCarga.setMaximumSize(new Dimension(Integer.MAX_VALUE, 160));
+        panelContenedor.add(panelCarga);
 
         panelDisco.setMaximumSize(new Dimension(Integer.MAX_VALUE, 260));
         panelContenedor.add(panelDisco);
@@ -211,6 +228,80 @@ public class DemoPanelesDisco extends JFrame {
         panelDisco.actualizar();
         panelCola.actualizar();
         panelGrafica.actualizar();
+    }
+
+    private int buscarPrimerBloque(String ruta) {
+        if (mapa != null) {
+            for (int i = 0; i < mapa.getBloquesArchivos(); i++) {
+                if (ruta.equals(mapa.getOcupante(i))) {
+                    return i;
+                }
+            }
+        }
+        return random.nextInt(Math.max(1, disco.getTotalBloques()));
+    }
+
+    private class AccionesCargaDemo implements AccionesCarga {
+        @Override
+        public String cargarSistemaArchivos(String textoJson) {
+            try {
+                EstadoDiscoInicial estado = CargadorSistemaArchivos.desdeJson(textoJson);
+                fsActual = estado.getSistemaArchivos();
+                refrescarVistas();
+                return null;
+            } catch (Exception e) {
+                return e.getMessage();
+            }
+        }
+
+        @Override
+        public String cargarProcesos(String textoJson) {
+            try {
+                ConfiguracionProcesos cfg = ConfiguracionProcesos.desdeJson(textoJson);
+                SolicitudProceso[] procs = cfg.getProcesos();
+                for (SolicitudProceso p : procs) {
+                    disco.encolar(new SolicitudDisco(
+                            new Pcb(p.getNombre(), 1, TipoProceso.IO_BOUND, p.getPrioridad(), p.getMemoria(), p.getDeadline(), 0, cicloActual),
+                            p.getOperacion(),
+                            p.getRuta(),
+                            buscarPrimerBloque(p.getRuta()),
+                            p.getBloques() > 0 ? p.getBloques() : 1,
+                            cicloActual
+                    ));
+                }
+                refrescarVistas();
+                return null;
+            } catch (Exception e) {
+                return e.getMessage();
+            }
+        }
+
+        @Override
+        public String iniciar() {
+            if (!enEjecucion) {
+                alternarSimulacion();
+            }
+            return null;
+        }
+
+        @Override
+        public String reiniciarConservandoDisco(String textoJson) {
+            return cargarProcesos(textoJson);
+        }
+
+        @Override
+        public String guardarSistemaArchivos(File destino) {
+            try {
+                if (fsActual == null) {
+                    return "No hay un sistema de archivos cargado para guardar";
+                }
+                String json = CargadorSistemaArchivos.aJson(fsActual, disco.getCabezal());
+                Files.writeString(destino.toPath(), json, StandardCharsets.UTF_8);
+                return null;
+            } catch (Exception e) {
+                return e.getMessage();
+            }
+        }
     }
 
     public static void main(String[] args) {
