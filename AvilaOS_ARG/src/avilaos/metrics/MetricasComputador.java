@@ -18,11 +18,13 @@ public final class MetricasComputador {
     private final double tiempoRespuestaPromedio;
     private final double cumplimientoDeadlines;
     private final double equidad;
+    private final int suspensiones;
+    private final int reactivaciones;
 
     public MetricasComputador(int idComputador, long ciclos, int procesosTotales, int completados,
                               int vencidos, double throughput, double utilizacion,
                               double tiempoRespuestaPromedio, double cumplimientoDeadlines,
-                              double equidad) {
+                              double equidad, int suspensiones, int reactivaciones) {
         this.idComputador = idComputador;
         this.ciclos = ciclos;
         this.procesosTotales = procesosTotales;
@@ -33,6 +35,8 @@ public final class MetricasComputador {
         this.tiempoRespuestaPromedio = tiempoRespuestaPromedio;
         this.cumplimientoDeadlines = cumplimientoDeadlines;
         this.equidad = equidad;
+        this.suspensiones = suspensiones;
+        this.reactivaciones = reactivaciones;
     }
 
     /** 0 si son las metricas del sistema completo. */
@@ -81,5 +85,16 @@ public final class MetricasComputador {
     /** Indice de equidad de Jain sobre la fraccion de su vida que cada proceso uso la CPU. */
     public double getEquidad() {
         return equidad;
+    }
+    
+    
+    /** Veces que un proceso fue suspendido. */
+    public int getSuspensiones() {
+        return suspensiones;
+    }
+
+    /** Veces que un proceso volvio del swap a la RAM. */
+    public int getReactivaciones() {
+        return reactivaciones;
     }
 }

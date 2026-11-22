@@ -59,6 +59,8 @@ public class Nucleo implements Relojable, OyenteDisco {
     private PuertoSwap puertoSwap;
     /** Memoria de los procesos que el disco todavia esta escribiendo en el swap. */
     private int ramPorLiberar = 0;
+    private int suspensiones = 0;
+    private int reactivaciones = 0;
  
     public Nucleo(int idComputador, Ram ram, Cpu cpu, Planificador planificador, Bitacora bitacora) {
         if (idComputador < 1) {
@@ -376,6 +378,26 @@ public class Nucleo implements Relojable, OyenteDisco {
             mutex.release();
         }
     }
+    
+        /** Cuantas veces se ha suspendido un proceso. */
+    public int getSuspensiones() {
+        mutex.acquireUninterruptibly();
+        try {
+            return suspensiones;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** Cuantas veces un proceso ha vuelto del swap a la RAM. */
+    public int getReactivaciones() {
+        mutex.acquireUninterruptibly();
+        try {
+            return reactivaciones;
+        } finally {
+            mutex.release();
+        }
+    }
  
     public Planificador getPlanificador() {
         mutex.acquireUninterruptibly();
@@ -499,6 +521,7 @@ public class Nucleo implements Relojable, OyenteDisco {
             registrar(proceso.getEtiqueta() + " se suspende: se escribe en el swap desde el bloque "
                     + proceso.getBloqueSwap());
         }
+        suspensiones++;
         return true;
     }
 
@@ -542,6 +565,7 @@ public class Nucleo implements Relojable, OyenteDisco {
         } else {
             bloqueados.agregarAlFinal(proceso);
         }
+        reactivaciones++;
         registrar(proceso.getEtiqueta() + " se reactiva y ocupa " + proceso.getMemoria()
                 + " MB (RAM " + ram + ")");
     }
