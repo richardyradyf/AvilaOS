@@ -98,24 +98,31 @@ public class RecolectorMetricas implements Relojable {
         Pcb[] todos = new Pcb[0];
         long ocupadaTotal = 0;
         long ciclosTotal = 0;
+        int suspensionesTotal = 0;
+        int reactivacionesTotal = 0;
         for (int i = 0; i < computadores.length; i++) {
             Computador c = computadores[i];
             Pcb[] procesos = procesosDe(c);
+            int suspensiones = c.getNucleo().getSuspensiones();
+            int reactivaciones = c.getNucleo().getReactivaciones();
             porComputador[i] = calcular(c.getId(), procesos, c.getCpu().getCiclosOcupada(),
-                    c.getCpu().getCiclosTotales(), ciclo);
+                    c.getCpu().getCiclosTotales(), ciclo, suspensiones, reactivaciones);
+            suspensionesTotal += suspensiones;
+            reactivacionesTotal += reactivaciones;
             ocupadaTotal += c.getCpu().getCiclosOcupada();
             ciclosTotal += c.getCpu().getCiclosTotales();
             todos = concatenar(todos, procesos);
         }
-        MetricasComputador sistema = calcular(0, todos, ocupadaTotal, ciclosTotal, ciclo);
+        MetricasComputador sistema = calcular(0, todos, ocupadaTotal, ciclosTotal, ciclo,
+                suspensionesTotal, reactivacionesTotal);
         return new ReporteMetricas(ciclo, porComputador, sistema);
-        
     }
 
     // ================= calculo =================
 
     /** Calcula las metricas de un conjunto de procesos y los ciclos de CPU asociados. */
-    private static MetricasComputador calcular(int id, Pcb[] procesos, long ocupada, long ciclosCpu, long ciclo) {
+    private static MetricasComputador calcular(int id, Pcb[] procesos, long ocupada, long ciclosCpu, long ciclo,
+        int suspensiones, int reactivaciones) {
         int completados = 0;
         int vencidos = 0;
         double sumaRespuesta = 0;
@@ -152,7 +159,7 @@ public class RecolectorMetricas implements Relojable {
                 ? (double) completados / (completados + vencidos) : Double.NaN;
         double equidad = (n > 0 && sumaX2 > 0) ? (sumaX * sumaX) / (n * sumaX2) : Double.NaN;
         return new MetricasComputador(id, ciclo, procesos.length, completados, vencidos, throughput,
-                utilizacion, respuesta, cumplimiento, equidad);
+                utilizacion, respuesta, cumplimiento, equidad, suspensiones, reactivaciones);
     }
 
     /** Todos los procesos de un computador: colas mas el que esta en la CPU, sin repetidos. */
@@ -165,6 +172,8 @@ public class RecolectorMetricas implements Relojable {
         resultado = concatenar(resultado, c.getNucleo().getNuevos());
         resultado = concatenar(resultado, c.getNucleo().getListos());
         resultado = concatenar(resultado, c.getNucleo().getBloqueados());
+        resultado = concatenar(resultado, c.getNucleo().getListosSuspendidos());
+        resultado = concatenar(resultado, c.getNucleo().getBloqueadosSuspendidos());
         resultado = concatenar(resultado, c.getNucleo().getTerminados());
         return resultado;
     }

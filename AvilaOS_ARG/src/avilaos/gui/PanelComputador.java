@@ -102,9 +102,12 @@ public class PanelComputador extends JPanel {
 
         modelo.setRowCount(0);
         Pcb[] todos = unir(enCpu, computador.getNucleo().getNuevos(), computador.getNucleo().getListos(),
-                computador.getNucleo().getBloqueados(), computador.getNucleo().getTerminados());
+                computador.getNucleo().getBloqueados(), computador.getNucleo().getListosSuspendidos(),
+                computador.getNucleo().getBloqueadosSuspendidos(), computador.getNucleo().getTerminados());
         for (Pcb p : todos) {
-            String motivo = p.getEstado() == EstadoProceso.BLOQUEADO && p.getMotivoBloqueo() != MotivoBloqueo.NINGUNO
+            String motivo = (p.getEstado() == EstadoProceso.BLOQUEADO
+                    || p.getEstado() == EstadoProceso.BLOQUEADO_SUSPENDIDO)
+                    && p.getMotivoBloqueo() != MotivoBloqueo.NINGUNO
                     ? p.getMotivoBloqueo().getNombreVisible() : "-";
             String deadline = p.getEstado() == EstadoProceso.TERMINADO
                     ? (p.isTerminadoPorDeadline() ? "vencido" : "cumplido")

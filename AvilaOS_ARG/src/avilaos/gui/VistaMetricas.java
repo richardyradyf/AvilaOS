@@ -21,7 +21,8 @@ public class VistaMetricas extends JPanel {
 
     private static final String[] COLUMNAS_PC = {
         "Computador", "Procesos", "Completados", "Vencidos", "Throughput (proc/ciclo)",
-        "Utilización CPU", "T. respuesta prom. (ciclos)", "Cumplimiento deadlines", "Equidad (Jain)"
+        "Utilización CPU", "T. respuesta prom. (ciclos)", "Cumplimiento deadlines", "Equidad (Jain)",
+        "Suspensiones", "Reactivaciones"
     };
 
     private final RecolectorMetricas recolector;
@@ -66,7 +67,8 @@ public class VistaMetricas extends JPanel {
     private static Object[] fila(MetricasComputador m, String nombre) {
         return new Object[]{nombre, m.getProcesosTotales(), m.getCompletados(), m.getVencidos(),
             decimal(m.getThroughput()), porcentaje(m.getUtilizacion()), decimal(m.getTiempoRespuestaPromedio()),
-            porcentaje(m.getCumplimientoDeadlines()), decimal(m.getEquidad())};
+            porcentaje(m.getCumplimientoDeadlines()), decimal(m.getEquidad()),
+            m.getSuspensiones(), m.getReactivaciones()};
     }
 
     private static String decimal(double valor) {
