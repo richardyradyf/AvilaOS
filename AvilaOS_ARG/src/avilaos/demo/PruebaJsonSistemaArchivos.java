@@ -135,6 +135,12 @@ public class PruebaJsonSistemaArchivos {
                     && a.getDueno().equals(b.getDueno()) && a.getPermiso() == b.getPermiso();
         }
         verificar(igual, "cada archivo vuelve con la misma cadena, dueno y permiso");
+        
+        SistemaArchivos conSwap = CargadorSistemaArchivos.desdeJson(ENUNCIADO).getSistemaArchivos();
+        conSwap.getMapa().configurarSwap(100);   // disco de 300 bloques: swap del 200 al 299
+        EstadoDiscoInicial e3 = CargadorSistemaArchivos.desdeJson(CargadorSistemaArchivos.aJson(conSwap, 250));
+        verificar(e3.getCabezalInicial() == 199,
+                "con el cabezal en el swap (250) se guarda en el ultimo bloque de archivos (199) y vuelve a cargar");
     }
 
     // ---- auxiliares ----
