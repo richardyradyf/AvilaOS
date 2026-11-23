@@ -28,6 +28,7 @@ public class Disco implements Relojable {
     public static final int VELOCIDAD_DEFAULT = 1;
 
     private int totalBloques;
+    private int limiteBarrido;
     private int velocidad;
     private final Lista<SolicitudDisco> cola;
     private final Lista<OyenteDisco> oyentes;
@@ -72,6 +73,7 @@ public class Disco implements Relojable {
         }
 
         this.totalBloques = totalBloques;
+        this.limiteBarrido = totalBloques - 1;
         this.velocidad = velocidad;
         this.politica = politicaInicial;
         this.politicaSolicitudActual = null;
@@ -173,7 +175,27 @@ public class Disco implements Relojable {
             if (cabezal >= nuevoTotalBloques) {
                 throw new IllegalArgumentException("El nuevo total de bloques deja al cabezal fuera de rango");
             }
+            if (limiteBarrido == totalBloques - 1 || limiteBarrido >= nuevoTotalBloques) {
+                limiteBarrido = nuevoTotalBloques - 1;
+            }
             this.totalBloques = nuevoTotalBloques;
+        } finally {
+            semaforo.release();
+        }
+    }
+
+    /**
+     * Ultimo bloque al que llegan SCAN y C-SCAN cuando no hay solicitudes mas arriba.
+     * Con swap es el ultimo bloque de archivos: el cabezal solo entra al swap si una
+     * solicitud lo necesita.
+     */
+    public void setLimiteBarrido(int ultimoBloque) {
+        semaforo.acquireUninterruptibly();
+        try {
+            if (ultimoBloque < 0 || ultimoBloque >= totalBloques) {
+                throw new IllegalArgumentException("Límite de barrido inválido: " + ultimoBloque);
+            }
+            this.limiteBarrido = ultimoBloque;
         } finally {
             semaforo.release();
         }
@@ -259,7 +281,8 @@ public class Disco implements Relojable {
                 PlanificacionDisco polActiva = (politicaSolicitudActual != null) ? politicaSolicitudActual : politica;
 
                 if (polActiva.vaAlExtremoAntes(cabezal, destino, direccion)) {
-                    int extremo = (direccion == DireccionCabezal.ASCENDENTE) ? totalBloques - 1 : 0;
+                    int extremo = (direccion == DireccionCabezal.ASCENDENTE)
+                            ? Math.max(limiteBarrido, cabezal) : 0;
                     if (cabezal == extremo) {
                         // Si ya estaba parado en el extremo al iniciar el movimiento, voltea o salta y avanza
                         aplicarLlegadaAlExtremo(polActiva);

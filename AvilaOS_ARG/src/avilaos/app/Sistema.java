@@ -93,6 +93,7 @@ public final class Sistema {
         mapa.configurarSwap(config.getSwapSizeBlocks());
         Disco disco = new Disco(mapa.getTotalBloques(), FabricaPoliticasDisco.crear(config.getInitialDiskPolicy()),
                 estado.getCabezalInicial(), config.getHeadSpeed());
+                disco.setLimiteBarrido(mapa.getBloquesArchivos() - 1);
         nucleo.setPuertoEs(new PuertoEsArchivos(estado.getSistemaArchivos(), disco));
         nucleo.setPuertoSwap(new SwapDisco(mapa, disco));
         disco.agregarOyente(nucleo);
