@@ -162,15 +162,19 @@ public final class CargadorSistemaArchivos {
         }
         MapaBloques mapa = fs.getMapa();
         int total = mapa.getBloquesArchivos();
-        if (cabezalActual < 0 || cabezalActual >= total) {
-            throw new IllegalArgumentException("El cabezal debe estar entre 0 y " + (total - 1));
+        int totalDisco = mapa.getTotalBloques();   // archivos + swap
+        if (cabezalActual < 0 || cabezalActual >= totalDisco) {
+            throw new IllegalArgumentException("El cabezal debe estar entre 0 y " + (totalDisco - 1));
         }
+        // El formato solo describe el area de archivos (initialHead de 0 a totalBlocks - 1).
+        // Si el cabezal esta en el swap, se guarda en el ultimo bloque del area de archivos.
+        int cabezalGuardado = Math.min(cabezalActual, total - 1);
         NodoFs[] nodos = fs.todosLosNodos();
         StringBuilder sb = new StringBuilder();
         sb.append("{\n");
         sb.append("  \"diskConfig\": {\n");
         sb.append("    \"totalBlocks\": ").append(total).append(",\n");
-        sb.append("    \"initialHead\": ").append(cabezalActual).append("\n");
+        sb.append("    \"initialHead\": ").append(cabezalGuardado).append("\n");
         sb.append("  },\n");
         sb.append("  \"fileSystem\": [\n");
         for (int i = 0; i < nodos.length; i++) {
