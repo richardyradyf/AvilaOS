@@ -29,6 +29,7 @@ public class Disco implements Relojable {
 
     private int totalBloques;
     private int limiteBarrido;
+    private boolean retenido;
     private int velocidad;
     private final Lista<SolicitudDisco> cola;
     private final Lista<OyenteDisco> oyentes;
@@ -200,6 +201,25 @@ public class Disco implements Relojable {
             semaforo.release();
         }
     }
+    
+    /** Mientras esta retenido, el disco recibe solicitudes pero no elige ninguna. */
+    public void setRetenido(boolean retenido) {
+        semaforo.acquireUninterruptibly();
+        try {
+            this.retenido = retenido;
+        } finally {
+            semaforo.release();
+        }
+    }
+
+    public boolean isRetenido() {
+        semaforo.acquireUninterruptibly();
+        try {
+            return retenido;
+        } finally {
+            semaforo.release();
+        }
+    }
 
     /**
      * Reinicia la cola, el estado y los contadores del disco para una nueva corrida.
@@ -243,7 +263,7 @@ public class Disco implements Relojable {
         semaforo.acquireUninterruptibly();
         try {
             if (solicitudActual == null) {
-                if (cola.estaVacia()) {
+                if (retenido || cola.estaVacia()) {
                     estado = EstadoDisco.OCIOSO;
                     return;
                 }

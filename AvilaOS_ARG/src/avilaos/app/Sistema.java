@@ -14,6 +14,7 @@ import avilaos.disco.SolicitudDisco;
 import avilaos.fs.EstadoDiscoInicial;
 import avilaos.fs.MapaBloques;
 import avilaos.fs.SistemaArchivos;
+import avilaos.kernel.ArranqueDisco;
 import avilaos.kernel.Nucleo;
 import avilaos.kernel.PuertoEsArchivos;
 import avilaos.kernel.SwapDisco;
@@ -99,6 +100,7 @@ public final class Sistema {
         disco.agregarOyente(nucleo);
         MetricasDisco metricasDisco = new MetricasDisco(disco);
         cluster.conectarAlReloj();
+        cluster.getReloj().registrar(new ArranqueDisco(nucleo, cluster.getComputador(1).getCpu(), disco));
         cluster.getReloj().registrar(disco);
         cluster.getReloj().registrar(metricasDisco);
         RecolectorMetricas recolector = new RecolectorMetricas(cluster, INTERVALO_MUESTREO, MAX_PUNTOS_GRAFICA);
