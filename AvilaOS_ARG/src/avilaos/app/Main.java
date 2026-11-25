@@ -4,6 +4,7 @@
  */
 package avilaos.app;
 
+import avilaos.gui.PanelArbolArchivos;
 import avilaos.gui.PanelCarga;
 import avilaos.gui.VentanaPrincipal;
 import avilaos.gui.VistaDisco;
@@ -24,6 +25,7 @@ public class Main {
     private static VentanaPrincipal ventana;
     private static VistaMetricas vistaMetricas;
     private static VistaDisco vistaDisco;
+    private static PanelArbolArchivos panelArchivos;
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(Main::mostrarCarga);
@@ -48,6 +50,9 @@ public class Main {
         if (vistaDisco != null) {
             vistaDisco.detener();
         }
+        if (panelArchivos != null) {
+            panelArchivos.detener();
+        }
         if (ventana != null) {
             ventana.dispose();
         }
@@ -56,6 +61,8 @@ public class Main {
         vistaMetricas = new VistaMetricas(sistema.getRecolector());
         vistaDisco = new VistaDisco(sistema.getDisco(), sistema.getSistemaArchivos().getMapa(),
                 sistema.getMetricasDisco());
+        panelArchivos = new PanelArbolArchivos(sistema.getSistemaArchivos());
+        nueva.agregarPestana("Archivos", panelArchivos);
         nueva.agregarPestana("Disco", vistaDisco);
         nueva.agregarPestana("Métricas", vistaMetricas);
         nueva.agregarPestana("Carga", panelCarga);
