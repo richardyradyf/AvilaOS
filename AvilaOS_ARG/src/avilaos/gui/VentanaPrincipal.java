@@ -4,6 +4,7 @@ import avilaos.cluster.Cluster;
 import java.awt.BorderLayout;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
+import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
@@ -22,6 +23,7 @@ public class VentanaPrincipal extends JFrame {
     private final PanelComputador panelComputador;
     private final PanelLog panelLog;
     private final JTabbedPane pestanas = new JTabbedPane();
+    private final JPanel norte = new JPanel(new BorderLayout());
     private final Timer temporizador;
 
     public VentanaPrincipal(AccionesUsuario acciones, ControlSimulacion control, Cluster cluster) {
@@ -38,7 +40,8 @@ public class VentanaPrincipal extends JFrame {
         pestanas.addTab("Computador", new JScrollPane(panelComputador));
         pestanas.addTab("Log", panelLog);
 
-        add(controles, BorderLayout.NORTH);
+        norte.add(controles, BorderLayout.NORTH);
+        add(norte, BorderLayout.NORTH);
         add(pestanas, BorderLayout.CENTER);
         setSize(1100, 720);
         setLocationRelativeTo(null);
@@ -57,6 +60,11 @@ public class VentanaPrincipal extends JFrame {
     /** Permite agregar pestañas desde fuera (configuracion, metricas). */
     public void agregarPestana(String titulo, JComponent contenido) {
         pestanas.addTab(titulo, contenido);
+    }
+    
+     /** Muestra un componente fijo debajo de los controles, por ejemplo el modo de usuario. */
+    public void agregarArriba(JComponent componente) {
+        norte.add(componente, BorderLayout.SOUTH);
     }
 
     public PanelCrearProceso getPanelCrear() {
