@@ -142,11 +142,9 @@ public class PanelDisco extends JPanel {
                 int x = MARGEN + col * (TAMANO_CELDA + MARGEN);
                 int y = MARGEN + fila * (TAMANO_CELDA + MARGEN);
 
-                boolean esLibre = mapaBloques.estaLibre(i);
-                boolean esSwap = mapaBloques.esSwap(i);
-
-                Color fondo = esLibre ? PaletaColores.BLOQUE_LIBRE
-                        : (esSwap ? PaletaColores.BLOQUE_SWAP : PaletaColores.BLOQUE_ARCHIVO);
+                String ocupante = mapaBloques.getOcupante(i);
+                boolean esLibre = (ocupante == null || ocupante.isBlank());
+                Color fondo = PaletaColores.colorDe(ocupante);
 
                 g2.setColor(fondo);
                 g2.fillRect(x, y, TAMANO_CELDA, TAMANO_CELDA);

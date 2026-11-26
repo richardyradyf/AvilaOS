@@ -47,6 +47,11 @@ public class PruebaVistasDisco {
         verificar(PaletaColores.BLOQUE_ARCHIVO != null, "Color bloque archivo definido");
         verificar(PaletaColores.BLOQUE_SWAP != null, "Color bloque swap definido");
         verificar(PaletaColores.ESTADO_OCIOSO != null, "Color estado ocioso definido");
+        verificar(PaletaColores.colorDe(null).equals(PaletaColores.BLOQUE_LIBRE), "colorDe(null) da BLOQUE_LIBRE");
+        verificar(PaletaColores.colorDe("   ").equals(PaletaColores.BLOQUE_LIBRE), "colorDe(blanco) da BLOQUE_LIBRE");
+        verificar(PaletaColores.colorDe("swap:P1").equals(PaletaColores.BLOQUE_SWAP), "colorDe(swap) da BLOQUE_SWAP");
+        verificar(PaletaColores.colorDe("/a.txt") != null, "colorDe(archivo) da color no nulo");
+        verificar(PaletaColores.colorDe("/a.txt").equals(PaletaColores.colorDe("/a.txt")), "colorDe es determinista para la misma ruta");
     }
 
     private static void probarPanelDisco() {

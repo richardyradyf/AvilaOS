@@ -61,7 +61,7 @@ public class PanelGraficaDisco extends JPanel {
 
         int izq = 55;
         int der = 20;
-        int arriba = 25;
+        int arriba = 40;
         int abajo = 35;
         int ancho = getWidth() - izq - der;
         int alto = getHeight() - arriba - abajo;
@@ -144,7 +144,7 @@ public class PanelGraficaDisco extends JPanel {
         String resumen = String.format("Total: %d bloques recorridos | Saltos C-SCAN: %d", despActual, saltos);
         g2.setColor(COLOR_LINEA);
         g2.setFont(new Font("SansSerif", Font.BOLD, 11));
-        g2.drawString(resumen, izq + ancho - fm.stringWidth(resumen), arriba - 6);
+        g2.drawString(resumen, izq + ancho - fm.stringWidth(resumen), arriba - 10);
 
         // 2. Trazar curva y relleno
         Polygon poligono = new Polygon();

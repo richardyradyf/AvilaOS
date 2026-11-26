@@ -78,7 +78,8 @@ public class PanelColaDisco extends JPanel {
         ));
 
         // 1. Barra superior: Controles de politica y velocidad + Solicitud en curso
-        JPanel panelNorte = new JPanel(new BorderLayout(8, 8));
+        JPanel panelNorte = new JPanel();
+        panelNorte.setLayout(new BoxLayout(panelNorte, BoxLayout.Y_AXIS));
         panelNorte.setBackground(PaletaColores.FONDO_PANEL);
 
         JPanel panelControles = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 2));
@@ -110,10 +111,8 @@ public class PanelColaDisco extends JPanel {
         panelControles.add(spinnerVelocidad);
         panelControles.add(new JLabel("bloques/ciclo"));
 
-        panelNorte.add(panelControles, BorderLayout.WEST);
-
-        // Subpanel con la solicitud activa
-        JPanel panelActiva = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 2));
+        // Subpanel con la solicitud activa en su propia fila para evitar truncamiento
+        JPanel panelActiva = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
         panelActiva.setBackground(PaletaColores.FONDO_PANEL);
         lblEstadoActual = new JLabel("Estado: " + disco.getEstado());
         lblEstadoActual.setFont(new Font("SansSerif", Font.BOLD, 12));
@@ -124,7 +123,9 @@ public class PanelColaDisco extends JPanel {
         panelActiva.add(lblEstadoActual);
         panelActiva.add(new JLabel("|"));
         panelActiva.add(lblSolicitudActual);
-        panelNorte.add(panelActiva, BorderLayout.EAST);
+
+        panelNorte.add(panelControles);
+        panelNorte.add(panelActiva);
 
         add(panelNorte, BorderLayout.NORTH);
 
