@@ -11,10 +11,7 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
 import java.awt.GridLayout;
-import java.awt.Insets;
 import java.util.Locale;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -182,6 +179,22 @@ public class PanelColaDisco extends JPanel {
         add(panelMetricas, BorderLayout.SOUTH);
 
         actualizar();
+    }
+    
+        /**
+     * En modo usuario la politica y la velocidad quedan bloqueadas; el texto de ayuda
+     * explica por que.
+     */
+    public void setCambiosPermitidos(boolean permitidos) {
+        comboPoliticas.setEnabled(permitidos);
+        spinnerVelocidad.setEnabled(permitidos);
+        String ayuda = permitidos ? null : "Modo usuario: solo el administrador puede cambiar la política del disco";
+        comboPoliticas.setToolTipText(ayuda);
+        spinnerVelocidad.setToolTipText(ayuda);
+    }
+
+    public boolean isCambiosPermitidos() {
+        return comboPoliticas.isEnabled();
     }
 
     /**
