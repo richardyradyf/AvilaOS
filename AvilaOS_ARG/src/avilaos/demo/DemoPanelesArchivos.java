@@ -1,10 +1,15 @@
 package avilaos.demo;
 
 import avilaos.fs.CargadorSistemaArchivos;
+import avilaos.fs.ControlPermisos;
 import avilaos.fs.Permiso;
 import avilaos.fs.ResultadoFs;
+import avilaos.fs.SesionUsuario;
 import avilaos.fs.SistemaArchivos;
 import avilaos.gui.PanelArbolArchivos;
+import avilaos.gui.PanelModoUsuario;
+import avilaos.gui.PanelTablaAsignacion;
+import avilaos.model.TipoOperacionES;
 import java.awt.BorderLayout;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
@@ -12,10 +17,11 @@ import javax.swing.Timer;
 
 /**
  * @author Gianm
- * Demo visual del sistema de archivos: carga el JSON del enunciado y muestra el arbol
- * con su panel de informacion. Cada 3 segundos hace una operacion de ejemplo (como si
- * la hiciera un proceso de E/S) para ver que el arbol se actualiza solo y conserva
- * las carpetas abiertas y la seleccion.
+ * Demo visual del sistema de archivos: carga el JSON del enunciado y muestra el
+ * selector de modo, el arbol con su panel de informacion y la tabla de asignacion.
+ * Al seleccionar un nodo imprime si la sesion actual puede leerlo. Cada 3 segundos
+ * hace una operacion de ejemplo (como si la hiciera un proceso de E/S) para ver que
+ * el arbol y la tabla se actualizan solos.
  */
 public class DemoPanelesArchivos {
 
@@ -45,14 +51,26 @@ public class DemoPanelesArchivos {
 
     private static void mostrar() {
         SistemaArchivos fs = CargadorSistemaArchivos.desdeJson(ENUNCIADO).getSistemaArchivos();
+        SesionUsuario sesion = new SesionUsuario();
+
+        PanelModoUsuario modo = new PanelModoUsuario(sesion);
+        modo.agregarOyenteModo(s -> System.out.println("Sesión cambiada: " + s));
 
         PanelArbolArchivos arbol = new PanelArbolArchivos(fs);
-        arbol.agregarOyenteSeleccion(ruta -> System.out.println("Seleccionado: " + ruta));
+        arbol.agregarOyenteSeleccion(ruta -> {
+            String rechazo = ControlPermisos.verificar(sesion, TipoOperacionES.LEER, ruta, fs);
+            System.out.println("Seleccionado: " + ruta + "  |  LEER como " + sesion.getUsuario() + ": "
+                    + (rechazo == null ? "permitido" : rechazo));
+        });
+
+        PanelTablaAsignacion tabla = new PanelTablaAsignacion(fs);
 
         JFrame ventana = new JFrame("ÁvilaOS - Sistema de archivos (demo)");
         ventana.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        ventana.add(modo, BorderLayout.NORTH);
         ventana.add(arbol, BorderLayout.CENTER);
-        ventana.setSize(820, 480);
+        ventana.add(tabla, BorderLayout.SOUTH);
+        ventana.setSize(860, 760);
         ventana.setLocationRelativeTo(null);
         ventana.setVisible(true);
 
