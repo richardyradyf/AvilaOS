@@ -32,6 +32,8 @@ public class PruebaSistemaArchivos {
         probarSinEspacio();
         probarDestinoYTransferencia();
         probarArchivosYCadenaRepartida();
+        probarCasosLimite();
+        probarConcurrencia();
 
         System.out.println();
         System.out.println("Comprobaciones: " + total + ", fallos: " + fallos);
@@ -208,6 +210,130 @@ public class PruebaSistemaArchivos {
         verificar(fs.archivos().length == 3, "archivos() devuelve los 3 archivos del arbol");
     }
 
+        // ================= Dia 9: casos limite y concurrencia =================
+
+    private static void probarCasosLimite() {
+        System.out.println("--- Casos limite (procesos que se cruzan) ---");
+        SistemaArchivos fs = new SistemaArchivos(new MapaBloques(50));
+        fs.crearDirectorio("/docs", "admin", PUB);
+        fs.crearArchivo("/docs/a.txt", 3, "admin", PUB, "P1");   // bloques 0, 1 y 2
+
+        // P1 y P2 piden eliminar el mismo archivo; el disco atiende primero a P1
+        int destino = fs.bloqueDestino(TipoOperacionES.ELIMINAR, "/docs/a.txt");
+        verificar(fs.eliminar("/docs/a.txt").isExito(), "P1 elimina /docs/a.txt");
+        ResultadoFs r2 = fs.eliminar("/docs/a.txt");
+        verificar(!r2.isExito() && r2.getMensaje().contains("No existe"),
+                "P2 intenta eliminar el mismo archivo: falla con mensaje y no lanza excepcion");
+        verificar(destino == 0 && fs.bloqueDestino(TipoOperacionES.ELIMINAR, "/docs/a.txt") == -1,
+                "despues de eliminado, su bloque destino es -1 (el cabezal no se mueve)");
+        verificar(!fs.leer("/docs/a.txt").isExito() && !fs.renombrar("/docs/a.txt", "b.txt").isExito(),
+                "leer o renombrar un archivo ya eliminado falla con mensaje");
+
+        // P3 pide crear en /tmp, pero mientras espera al disco otro proceso borra /tmp
+        fs.crearDirectorio("/tmp", "admin", PUB);
+        int libres = fs.getMapa().libres();
+        fs.eliminar("/tmp");
+        ResultadoFs r3 = fs.crearArchivo("/tmp/nuevo.txt", 4, "admin", PUB, "P3");
+        verificar(!r3.isExito() && r3.getMensaje().contains("No existe el directorio /tmp"),
+                "crear en un directorio que se borro mientras esperaba falla con mensaje");
+        verificar(fs.getMapa().libres() == libres, "y no se reserva ningun bloque");
+
+        // renombrar un directorio a un nombre que ya existe
+        fs.crearDirectorio("/fotos", "admin", PUB);
+        fs.crearArchivo("/fotos/f.png", 2, "admin", PUB, "P4");
+        ResultadoFs r4 = fs.renombrar("/docs", "fotos");
+        verificar(!r4.isExito() && r4.getMensaje().contains("Ya existe /fotos"),
+                "renombrar /docs a fotos (que ya existe) falla con mensaje");
+        verificar(fs.buscar("/docs") != null && fs.buscar("/fotos/f.png") != null,
+                "los dos directorios quedan como estaban");
+    }
+
+    /** Primer error que haya lanzado alguno de los hilos de la prueba de concurrencia. */
+    private static volatile String errorEnHilo = null;
+
+    private static void probarConcurrencia() {
+        System.out.println("--- Concurrencia: tres hilos a la vez durante 1 segundo ---");
+        SistemaArchivos fs = new SistemaArchivos(new MapaBloques(200));
+        fs.crearDirectorio("/conc", "admin", PUB);
+        long fin = System.currentTimeMillis() + 1000;
+        int[] operaciones = new int[3];
+
+        Thread escritorA = new Thread(() -> crearYBorrar(fs, "a", fin, operaciones, 0));
+        Thread escritorB = new Thread(() -> crearYBorrar(fs, "b", fin, operaciones, 1));
+        Thread lector = new Thread(() -> leerSinParar(fs, fin, operaciones, 2));
+        escritorA.start();
+        escritorB.start();
+        lector.start();
+        esperar(escritorA);
+        esperar(escritorB);
+        esperar(lector);
+
+        verificar(errorEnHilo == null,
+                "ningun hilo lanzo excepciones" + (errorEnHilo == null ? "" : ": " + errorEnHilo));
+        verificar(operaciones[0] > 0 && operaciones[1] > 0 && operaciones[2] > 0,
+                "los tres hilos trabajaron a la vez (A: " + operaciones[0] + " archivos, B: "
+                + operaciones[1] + " archivos, lector: " + operaciones[2] + " vueltas)");
+
+        int usados = 0;
+        boolean coherente = true;
+        for (NodoFs a : fs.archivos()) {
+            usados += a.getCantidadBloques();
+            int[] cadena = fs.getMapa().cadena(a.getPrimerBloque());
+            coherente = coherente && cadena.length == a.getCantidadBloques();
+            for (int b : cadena) {
+                coherente = coherente && a.getRuta().equals(fs.getMapa().getOcupante(b));
+            }
+        }
+        int libres = fs.getMapa().libres();
+        verificar(usados + libres == fs.getMapa().getBloquesArchivos(),
+                "bloques de los archivos + libres = total (" + usados + " + " + libres + " = "
+                + fs.getMapa().getBloquesArchivos() + ")");
+        verificar(coherente, "cada archivo conserva su cadena completa y sus bloques lo tienen como ocupante");
+    }
+
+    /** Un "proceso" que crea archivos sin parar y va borrando los que creo hace 3 vueltas. */
+    private static void crearYBorrar(SistemaArchivos fs, String prefijo, long fin, int[] operaciones, int indice) {
+        try {
+            int i = 0;
+            while (System.currentTimeMillis() < fin) {
+                fs.crearArchivo("/conc/" + prefijo + i, 1 + i % 7, "admin", PUB, "P" + prefijo);
+                if (i >= 3) {
+                    fs.eliminar("/conc/" + prefijo + (i - 3));
+                }
+                i++;
+            }
+            operaciones[indice] = i;
+        } catch (RuntimeException e) {
+            errorEnHilo = prefijo + ": " + e;
+        }
+    }
+
+    /** Hace lo mismo que la interfaz: leer la lista de archivos y la cadena de cada uno. */
+    private static void leerSinParar(SistemaArchivos fs, long fin, int[] operaciones, int indice) {
+        try {
+            int vueltas = 0;
+            while (System.currentTimeMillis() < fin) {
+                for (NodoFs a : fs.archivos()) {
+                    fs.getMapa().cadena(a.getPrimerBloque());
+                    fs.buscar(a.getRuta());
+                }
+                vueltas++;
+            }
+            operaciones[indice] = vueltas;
+        } catch (RuntimeException e) {
+            errorEnHilo = "lector: " + e;
+        }
+    }
+
+    private static void esperar(Thread hilo) {
+        try {
+            hilo.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            errorEnHilo = "se interrumpio la espera de un hilo";
+        }
+    }
+    
     private static void verificar(boolean condicion, String descripcion) {
         total++;
         if (condicion) {

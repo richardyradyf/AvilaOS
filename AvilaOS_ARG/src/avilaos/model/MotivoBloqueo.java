@@ -9,6 +9,8 @@ public enum MotivoBloqueo {
     NINGUNO("Ninguno"),
     /** Espera que termine una operacion de E/S. */
     ESPERA_ES("Esperando E/S"),
+    /** Un proceso de E/S espera que el disco atienda su solicitud. */
+    ESPERA_DISCO("Esperando el disco"),
     /** Espera en un semaforo: otro proceso esta en la region critica. */
     REGION_CRITICA_OCUPADA("Regi\u00f3n cr\u00edtica ocupada");
 

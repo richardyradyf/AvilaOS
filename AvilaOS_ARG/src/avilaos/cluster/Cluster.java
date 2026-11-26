@@ -12,6 +12,7 @@ import avilaos.util.Bitacora;
 import avilaos.util.Iterador;
 import avilaos.util.Lista;
 import java.util.concurrent.Semaphore;
+import avilaos.model.SolicitudProceso;
 
 /**
  * @author richard
@@ -73,6 +74,17 @@ public class Cluster {
         Pcb p = new Pcb(nombre, c.getId(), TipoProceso.IO_BOUND, prioridad, memoria, instrucciones,
                 deadline, reloj.getCicloActual());
         p.configurarEs(cadaInstrucciones, ciclosEs);
+        c.getNucleo().agregarProceso(p);
+        return p;
+    }
+    
+    
+    /** Crea un proceso de E/S sobre un archivo a partir de una solicitud hecha con deEs. */
+    public Pcb crearProcesoArchivo(SolicitudProceso s) {
+        Computador c = resolverComputador(s.getIdComputador(), s.getMemoria());
+        Pcb p = new Pcb(s.getNombre(), c.getId(), TipoProceso.IO_BOUND, s.getPrioridad(), s.getMemoria(),
+                s.getInstrucciones(), s.getDeadline(), reloj.getCicloActual());
+        p.configurarArchivo(s.getOperacion(), s.getRuta(), s.getBloques(), s.getNuevoNombre(), s.getUsuario());
         c.getNucleo().agregarProceso(p);
         return p;
     }
@@ -177,7 +189,7 @@ public class Cluster {
     // ---- privados ----
  
     /** Conecta los computadores al reloj, una sola vez. */
-    private void conectarAlReloj() {
+    public void conectarAlReloj() {
         mutex.acquireUninterruptibly();
         try {
             if (conectadoAlReloj) {

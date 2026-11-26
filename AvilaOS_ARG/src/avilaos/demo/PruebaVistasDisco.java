@@ -6,7 +6,9 @@ import avilaos.disco.PoliticaSstf;
 import avilaos.disco.SolicitudDisco;
 import avilaos.fs.MapaBloques;
 import avilaos.model.TipoOperacionES;
+import avilaos.gui.AccionesCarga;
 import avilaos.gui.PaletaColores;
+import avilaos.gui.PanelCarga;
 import avilaos.gui.PanelColaDisco;
 import avilaos.gui.PanelDisco;
 import avilaos.gui.PanelGraficaDisco;
@@ -31,9 +33,10 @@ public class PruebaVistasDisco {
         probarPanelDisco();
         probarPanelColaDisco();
         probarPanelGraficaDisco();
+        probarPanelCarga();
 
         System.out.println();
-        System.out.println("Pruebas Vistas Disco (Dias 6 y 7): " + total + ", fallos: " + fallos);
+        System.out.println("Pruebas Vistas Disco (Dias 6, 7 y 9): " + total + ", fallos: " + fallos);
         System.out.println(fallos == 0 ? "TODO CORRECTO" : "HAY FALLOS: revisar lineas FALLO");
     }
 
@@ -44,6 +47,11 @@ public class PruebaVistasDisco {
         verificar(PaletaColores.BLOQUE_ARCHIVO != null, "Color bloque archivo definido");
         verificar(PaletaColores.BLOQUE_SWAP != null, "Color bloque swap definido");
         verificar(PaletaColores.ESTADO_OCIOSO != null, "Color estado ocioso definido");
+        verificar(PaletaColores.colorDe(null).equals(PaletaColores.BLOQUE_LIBRE), "colorDe(null) da BLOQUE_LIBRE");
+        verificar(PaletaColores.colorDe("   ").equals(PaletaColores.BLOQUE_LIBRE), "colorDe(blanco) da BLOQUE_LIBRE");
+        verificar(PaletaColores.colorDe("swap:P1").equals(PaletaColores.BLOQUE_SWAP), "colorDe(swap) da BLOQUE_SWAP");
+        verificar(PaletaColores.colorDe("/a.txt") != null, "colorDe(archivo) da color no nulo");
+        verificar(PaletaColores.colorDe("/a.txt").equals(PaletaColores.colorDe("/a.txt")), "colorDe es determinista para la misma ruta");
     }
 
     private static void probarPanelDisco() {
@@ -98,6 +106,39 @@ public class PruebaVistasDisco {
         panel.actualizar();
         verificar(metricas.getSerieDesplazamiento().tamano() > 0, "Serie temporal registro puntos");
         verificar(true, "actualizar() en PanelGraficaDisco ejecuta sin excepciones");
+    }
+
+    private static void probarPanelCarga() {
+        System.out.println("--- Prueba: PanelCarga y AccionesCarga (Dia 9) ---");
+        AccionesCarga accionesFalsas = new AccionesCarga() {
+            @Override
+            public String cargarSistemaArchivos(String textoJson) {
+                return null;
+            }
+            @Override
+            public String cargarProcesos(String textoJson) {
+                return null;
+            }
+            @Override
+            public String iniciar() {
+                return null;
+            }
+            @Override
+            public String reiniciarConservandoDisco(String textoJson) {
+                return null;
+            }
+            @Override
+            public String guardarSistemaArchivos(java.io.File destino) {
+                return null;
+            }
+        };
+
+        PanelCarga panel = new PanelCarga(accionesFalsas);
+        verificar(panel != null, "PanelCarga instanciado correctamente");
+        verificar(!panel.getBtnIniciar().isEnabled(), "Boton Iniciar inicia deshabilitado");
+        verificar(!panel.isSistemaArchivosCargado(), "Sistema de archivos inicia sin cargar");
+        verificar(!panel.isProcesosCargados(), "Procesos inician sin cargar");
+        verificar(!panel.isSimulacionIniciada(), "Simulacion no iniciada al inicio");
     }
 
     private static void verificar(boolean condicion, String descripcion) {
