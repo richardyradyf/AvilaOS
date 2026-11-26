@@ -58,7 +58,9 @@ public class Main {
         }
         VentanaPrincipal nueva = new VentanaPrincipal(sistema.getControlador(), sistema.getControlador(),
                 sistema.getCluster());
-        nueva.agregarArriba(new PanelModoUsuario(sesion));
+        sistema.getControlador().setPermisos(sesion, sistema.getSistemaArchivos());
+        PanelModoUsuario panelModo = new PanelModoUsuario(sesion);
+        nueva.agregarArriba(panelModo);
 
         panelArchivos = new PanelArbolArchivos(sistema.getSistemaArchivos());
         panelTabla = new PanelTablaAsignacion(sistema.getSistemaArchivos());
@@ -66,6 +68,8 @@ public class Main {
         archivos.setResizeWeight(0.6);
         vistaDisco = new VistaDisco(sistema.getDisco(), sistema.getSistemaArchivos().getMapa(),
                 sistema.getMetricasDisco());
+        vistaDisco.setCambiosPermitidos(sesion.esAdministrador());
+        panelModo.agregarOyenteModo(s -> vistaDisco.setCambiosPermitidos(s.esAdministrador()));
         vistaMetricas = new VistaMetricas(sistema.getRecolector());
 
         nueva.agregarPestana("Archivos", archivos);

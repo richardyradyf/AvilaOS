@@ -46,6 +46,15 @@ public class VistaDisco extends JPanel {
         temporizador = new Timer(300, e -> actualizar());
         temporizador.start();
     }
+    
+        /** En modo usuario bloquea el cambio de politica y de velocidad del disco. */
+    public void setCambiosPermitidos(boolean permitidos) {
+        panelCola.setCambiosPermitidos(permitidos);
+    }
+
+    public boolean isCambiosPermitidos() {
+        return panelCola.isCambiosPermitidos();
+    }
 
     /** Vuelve a leer el disco y las metricas y los muestra. */
     public void actualizar() {
