@@ -189,7 +189,7 @@ public class Cluster {
     // ---- privados ----
  
     /** Conecta los computadores al reloj, una sola vez. */
-    private void conectarAlReloj() {
+    public void conectarAlReloj() {
         mutex.acquireUninterruptibly();
         try {
             if (conectadoAlReloj) {
