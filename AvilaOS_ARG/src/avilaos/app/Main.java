@@ -4,95 +4,99 @@
  */
 package avilaos.app;
 
-import avilaos.config.ConfiguracionSimulacion;
-import avilaos.config.EntradaInvalidaException;
+import avilaos.fs.SesionUsuario;
+import avilaos.gui.PanelArbolArchivos;
+import avilaos.gui.PanelCarga;
+import avilaos.gui.PanelModoUsuario;
+import avilaos.gui.PanelTablaAsignacion;
 import avilaos.gui.VentanaPrincipal;
-import avilaos.gui.VistaConfiguracion;
+import avilaos.gui.VistaDisco;
 import avilaos.gui.VistaMetricas;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import javax.swing.JOptionPane;
+import javax.swing.JFrame;
+import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
 
 /**
- * Punto de entrada de AvilaOS. Arma el sistema con la configuracion de "configuracion.json"
- * (si existe en la carpeta de trabajo) o con la de ejemplo, y abre la ventana. Desde la
- * pestaña "Configuración" se puede reiniciar con otra configuracion: se detiene el reloj
- * actual, se cierra la ventana y se arma un sistema nuevo.
+ * Punto de entrada de AvilaOS. Primero se abre el panel de carga, que exige los dos JSON
+ * (sistema de archivos y procesos) antes de iniciar el reloj. Cada vez que se inicia o se
+ * reinicia con procesos nuevos, se cierra la ventana anterior y se abre una con el
+ * sistema que esta corriendo; el panel de carga pasa a su pestaña "Carga". El modo de
+ * usuario se conserva entre reinicios.
  */
 public class Main {
 
-    private static final String ARCHIVO_CONFIGURACION = "configuracion.json";
+    private static final SesionUsuario sesion = new SesionUsuario();
 
-    private static Sistema sistema;
+    private static PanelCarga panelCarga;
+    private static JFrame ventanaInicio;
     private static VentanaPrincipal ventana;
     private static VistaMetricas vistaMetricas;
+    private static VistaDisco vistaDisco;
+    private static PanelArbolArchivos panelArchivos;
+    private static PanelTablaAsignacion panelTabla;
 
     public static void main(String[] args) {
-        ConfiguracionSimulacion config = cargarInicial();
-        SwingUtilities.invokeLater(() -> {
-            try {
-                arrancar(config);
-            } catch (EntradaInvalidaException e) {
-                JOptionPane.showMessageDialog(null, e.getMessage(), "No se pudo iniciar ÁvilaOS",
-                        JOptionPane.ERROR_MESSAGE);
-                arrancar(ConfiguracionSimulacion.porDefecto());
-            }
-        });
+        SwingUtilities.invokeLater(Main::mostrarCarga);
     }
 
-    /** Lee configuracion.json si existe; si no existe o es invalido usa el ejemplo. */
-    private static ConfiguracionSimulacion cargarInicial() {
-        Path ruta = Paths.get(ARCHIVO_CONFIGURACION);
-        if (Files.exists(ruta)) {
-            try {
-                return ConfiguracionSimulacion.desdeJson(new String(Files.readAllBytes(ruta), StandardCharsets.UTF_8));
-            } catch (IOException | EntradaInvalidaException e) {
-                System.out.println("No se pudo usar " + ARCHIVO_CONFIGURACION + " (" + e.getMessage()
-                        + "); se usa la configuración de ejemplo.");
-            }
-        }
-        return ConfiguracionSimulacion.porDefecto();
+    /** Ventana inicial: solo el panel de carga. */
+    private static void mostrarCarga() {
+        panelCarga = new PanelCarga(new ControladorCarga(Main::mostrarSistema));
+        ventanaInicio = new JFrame("ÁvilaOS - Carga inicial");
+        ventanaInicio.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        ventanaInicio.add(panelCarga);
+        ventanaInicio.pack();
+        ventanaInicio.setLocationRelativeTo(null);
+        ventanaInicio.setVisible(true);
     }
 
-    /** Debe llamarse en el hilo de eventos de Swing. */
-    private static void arrancar(ConfiguracionSimulacion config) {
-        Sistema nuevo = Sistema.construir(config);
-        if (sistema != null) {
-            sistema.getCluster().detener();
-        }
-        if (vistaMetricas != null) {
-            vistaMetricas.detener();
-        }
+    /** Se llama en el hilo de Swing, desde los botones del panel de carga. */
+    private static void mostrarSistema(Sistema sistema) {
+        detenerVistas();
         if (ventana != null) {
             ventana.dispose();
         }
-        sistema = nuevo;
-        VentanaPrincipal nueva = new VentanaPrincipal(nuevo.getControlador(), nuevo.getControlador(), nuevo.getCluster());
-        vistaMetricas = new VistaMetricas(nuevo.getRecolector());
+        VentanaPrincipal nueva = new VentanaPrincipal(sistema.getControlador(), sistema.getControlador(),
+                sistema.getCluster());
+        sistema.getControlador().setPermisos(sesion, sistema.getSistemaArchivos());
+        PanelModoUsuario panelModo = new PanelModoUsuario(sesion);
+        nueva.agregarArriba(panelModo);
+
+        panelArchivos = new PanelArbolArchivos(sistema.getSistemaArchivos());
+        panelTabla = new PanelTablaAsignacion(sistema.getSistemaArchivos());
+        JSplitPane archivos = new JSplitPane(JSplitPane.VERTICAL_SPLIT, panelArchivos, panelTabla);
+        archivos.setResizeWeight(0.6);
+        vistaDisco = new VistaDisco(sistema.getDisco(), sistema.getSistemaArchivos().getMapa(),
+                sistema.getMetricasDisco());
+        vistaDisco.setCambiosPermitidos(sesion.esAdministrador());
+        panelModo.agregarOyenteModo(s -> vistaDisco.setCambiosPermitidos(s.esAdministrador()));
+        vistaMetricas = new VistaMetricas(sistema.getRecolector());
+
+        nueva.agregarPestana("Archivos", archivos);
+        nueva.agregarPestana("Disco", vistaDisco);
         nueva.agregarPestana("Métricas", vistaMetricas);
-        nueva.agregarPestana("Configuración", new VistaConfiguracion(Main::reiniciar, config));
+        nueva.agregarPestana("Carga", panelCarga);
         ventana = nueva;
         nueva.setVisible(true);
+        if (ventanaInicio != null) {
+            ventanaInicio.dispose();
+            ventanaInicio = null;
+        }
     }
 
-    private static String reiniciar(ConfiguracionSimulacion config) {
-        try {
-            // se reinicia despues de este evento, para no cerrar la ventana desde su propio boton
-            SwingUtilities.invokeLater(() -> {
-                try {
-                    arrancar(config);
-                } catch (EntradaInvalidaException e) {
-                    JOptionPane.showMessageDialog(ventana, e.getMessage(), "No se pudo aplicar",
-                            JOptionPane.ERROR_MESSAGE);
-                }
-            });
-            return null;
-        } catch (RuntimeException e) {
-            return e.getMessage();
+    /** Detiene el refresco de las vistas de la ventana anterior. */
+    private static void detenerVistas() {
+        if (vistaMetricas != null) {
+            vistaMetricas.detener();
+        }
+        if (vistaDisco != null) {
+            vistaDisco.detener();
+        }
+        if (panelArchivos != null) {
+            panelArchivos.detener();
+        }
+        if (panelTabla != null) {
+            panelTabla.detener();
         }
     }
 }

@@ -5,36 +5,21 @@ import avilaos.cluster.Computador;
 import avilaos.hardware.Relojable;
 import avilaos.model.EstadoProceso;
 import avilaos.model.Pcb;
-import avilaos.model.TipoProceso;
-import avilaos.sync.BufferAcotado;
-import avilaos.util.Iterador;
-import avilaos.util.Lista;
 import java.util.concurrent.Semaphore;
 
 /**
  * @author Gianm
  * Recolecta las metricas de rendimiento del sistema. Hace dos cosas:
  *
- * 1) Como Relojable, en cada ciclo cuenta cuantos ciclos pasa cada proceso bloqueado
- *    (en semaforos o esperando un acceso remoto) y, cada "intervaloMuestreo" ciclos,
- *    guarda la utilizacion reciente de cada CPU para la grafica.
+ * 1) Como Relojable, cada "intervaloMuestreo" ciclos guarda la utilizacion reciente
+ *    de cada CPU para la grafica.
  * 2) generarReporte calcula, a partir del estado actual, throughput, utilizacion,
- *    tiempo de respuesta, cumplimiento de deadlines, equidad y datos de los buffers.
+ *    tiempo de respuesta, cumplimiento de deadlines y equidad.
  *
  * Debe crearse cuando ya estan agregados todos los computadores del cluster y
  * registrarse en el reloj (cluster.getReloj().registrar(recolector)).
  */
 public class RecolectorMetricas implements Relojable {
-
-    private static class RegistroBloqueo {
-        final Pcb proceso;
-        long ciclosSemaforo;
-        long ciclosRemoto;
-
-        RegistroBloqueo(Pcb proceso) {
-            this.proceso = proceso;
-        }
-    }
 
     private final Cluster cluster;
     private final int intervaloMuestreo;
@@ -44,7 +29,6 @@ public class RecolectorMetricas implements Relojable {
     private SerieTemporal[] series = new SerieTemporal[0];
     private long[] ultimaOcupada = new long[0];
     private long[] ultimaTotal = new long[0];
-    private final Lista<RegistroBloqueo> bloqueos = new Lista<>();
 
     /**
      * @param intervaloMuestreo cada cuantos ciclos se guarda un punto de la grafica
@@ -71,12 +55,6 @@ public class RecolectorMetricas implements Relojable {
         mutex.acquireUninterruptibly();
         try {
             asegurarSeries(computadores.length);
-            for (Computador c : computadores) {
-                Pcb[] bloqueados = c.getNucleo().getBloqueados();
-                for (Pcb p : bloqueados) {
-                    contarBloqueo(p);
-                }
-            }
             if (numeroCiclo % intervaloMuestreo == 0) {
                 for (int i = 0; i < computadores.length; i++) {
                     muestrear(i, computadores[i], numeroCiclo);
@@ -120,52 +98,31 @@ public class RecolectorMetricas implements Relojable {
         Pcb[] todos = new Pcb[0];
         long ocupadaTotal = 0;
         long ciclosTotal = 0;
+        int suspensionesTotal = 0;
+        int reactivacionesTotal = 0;
         for (int i = 0; i < computadores.length; i++) {
             Computador c = computadores[i];
             Pcb[] procesos = procesosDe(c);
+            int suspensiones = c.getNucleo().getSuspensiones();
+            int reactivaciones = c.getNucleo().getReactivaciones();
             porComputador[i] = calcular(c.getId(), procesos, c.getCpu().getCiclosOcupada(),
-                    c.getCpu().getCiclosTotales(), ciclo);
+                    c.getCpu().getCiclosTotales(), ciclo, suspensiones, reactivaciones);
+            suspensionesTotal += suspensiones;
+            reactivacionesTotal += reactivaciones;
             ocupadaTotal += c.getCpu().getCiclosOcupada();
             ciclosTotal += c.getCpu().getCiclosTotales();
             todos = concatenar(todos, procesos);
         }
-        MetricasComputador sistema = calcular(0, todos, ocupadaTotal, ciclosTotal, ciclo);
-
-        BufferAcotado[] bufs = cluster.getBuffers();
-        MetricasBuffer[] mb = new MetricasBuffer[bufs.length];
-        for (int i = 0; i < bufs.length; i++) {
-            BufferAcotado b = bufs[i];
-            mb[i] = new MetricasBuffer(b.getId(), b.getIdComputadorAnfitrion(), b.getCapacidad(),
-                    b.getElementos(), b.getProducidos(), b.getConsumidos());
-        }
-
-        int procesosConBuffer = 0;
-        long ciclosSemaforo = 0;
-        long ciclosRemoto = 0;
-        mutex.acquireUninterruptibly();
-        try {
-            for (Pcb p : todos) {
-                if (usaBuffer(p)) {
-                    procesosConBuffer++;
-                    RegistroBloqueo r = buscarRegistro(p);
-                    if (r != null) {
-                        ciclosSemaforo += r.ciclosSemaforo;
-                        ciclosRemoto += r.ciclosRemoto;
-                    }
-                }
-            }
-        } finally {
-            mutex.release();
-        }
-        double bloqueoSem = procesosConBuffer > 0 ? (double) ciclosSemaforo / procesosConBuffer : Double.NaN;
-        double bloqueoRem = procesosConBuffer > 0 ? (double) ciclosRemoto / procesosConBuffer : Double.NaN;
-        return new ReporteMetricas(ciclo, porComputador, sistema, mb, procesosConBuffer, bloqueoSem, bloqueoRem);
+        MetricasComputador sistema = calcular(0, todos, ocupadaTotal, ciclosTotal, ciclo,
+                suspensionesTotal, reactivacionesTotal);
+        return new ReporteMetricas(ciclo, porComputador, sistema);
     }
 
     // ================= calculo =================
 
     /** Calcula las metricas de un conjunto de procesos y los ciclos de CPU asociados. */
-    private static MetricasComputador calcular(int id, Pcb[] procesos, long ocupada, long ciclosCpu, long ciclo) {
+    private static MetricasComputador calcular(int id, Pcb[] procesos, long ocupada, long ciclosCpu, long ciclo,
+        int suspensiones, int reactivaciones) {
         int completados = 0;
         int vencidos = 0;
         double sumaRespuesta = 0;
@@ -202,7 +159,7 @@ public class RecolectorMetricas implements Relojable {
                 ? (double) completados / (completados + vencidos) : Double.NaN;
         double equidad = (n > 0 && sumaX2 > 0) ? (sumaX * sumaX) / (n * sumaX2) : Double.NaN;
         return new MetricasComputador(id, ciclo, procesos.length, completados, vencidos, throughput,
-                utilizacion, respuesta, cumplimiento, equidad);
+                utilizacion, respuesta, cumplimiento, equidad, suspensiones, reactivaciones);
     }
 
     /** Todos los procesos de un computador: colas mas el que esta en la CPU, sin repetidos. */
@@ -215,6 +172,8 @@ public class RecolectorMetricas implements Relojable {
         resultado = concatenar(resultado, c.getNucleo().getNuevos());
         resultado = concatenar(resultado, c.getNucleo().getListos());
         resultado = concatenar(resultado, c.getNucleo().getBloqueados());
+        resultado = concatenar(resultado, c.getNucleo().getListosSuspendidos());
+        resultado = concatenar(resultado, c.getNucleo().getBloqueadosSuspendidos());
         resultado = concatenar(resultado, c.getNucleo().getTerminados());
         return resultado;
     }
@@ -240,11 +199,9 @@ public class RecolectorMetricas implements Relojable {
             exacto[i] = mezcla[i];
         }
         return exacto;
+        
     }
-
-    private static boolean usaBuffer(Pcb p) {
-        return p.getTipo() == TipoProceso.PRODUCTOR || p.getTipo() == TipoProceso.CONSUMIDOR;
-    }
+   
 
     // ================= privados (el mutex ya esta tomado) =================
 
@@ -281,37 +238,5 @@ public class RecolectorMetricas implements Relojable {
         ultimaTotal[indice] = total;
     }
 
-    private void contarBloqueo(Pcb p) {
-        if (!usaBuffer(p)) {
-            return;
-        }
-        RegistroBloqueo r = buscarRegistro(p);
-        if (r == null) {
-            r = new RegistroBloqueo(p);
-            bloqueos.agregarAlFinal(r);
-        }
-        switch (p.getMotivoBloqueo()) {
-            case ACCESO_REMOTO:
-                r.ciclosRemoto++;
-                break;
-            case BUFFER_LLENO:
-            case BUFFER_VACIO:
-            case REGION_CRITICA_OCUPADA:
-                r.ciclosSemaforo++;
-                break;
-            default:
-                break;   // la E/S no cuenta como bloqueo de semaforo
-        }
-    }
-
-    private RegistroBloqueo buscarRegistro(Pcb p) {
-        Iterador<RegistroBloqueo> it = bloqueos.iterador();
-        while (it.tieneSiguiente()) {
-            RegistroBloqueo r = it.siguiente();
-            if (r.proceso == p) {
-                return r;
-            }
-        }
-        return null;
-    }
+    
 }

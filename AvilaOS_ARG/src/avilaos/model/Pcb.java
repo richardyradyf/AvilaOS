@@ -42,6 +42,19 @@ public class Pcb {
     private int instruccionesEntreEs;
     private int ciclosEs;
     private long cicloFinEs;
+    
+    // ---- proceso de E/S sobre un archivo (Proyecto 2) ----
+    private TipoOperacionES operacion;
+    private String ruta;
+    private int bloquesNuevos;
+    private String nuevoNombre;
+    private String usuario = "admin";
+    private boolean discoPedido;
+    
+    // ---- area de intercambio (Proyecto 2) ----
+    private int bloqueSwap = -1;
+    private boolean escribiendoSwap;
+    private boolean leyendoSwap;
  
     /**
      * Crea un proceso en estado NUEVO. El ID se genera dentro, despues de validar,
@@ -132,10 +145,47 @@ public class Pcb {
         motivoBloqueo = motivo;
     }
  
+/**
+* Ocurre el evento que el proceso esperaba.
+* BLOQUEADO -> LISTO y BLOQUEADO_SUSPENDIDO -> LISTO_SUSPENDIDO (sigue en el swap).
+*/
     public void desbloquear() {
-        exigirEstado(EstadoProceso.BLOQUEADO, "desbloquear");
-        estado = EstadoProceso.LISTO;
+        if (estado == EstadoProceso.BLOQUEADO) {
+            estado = EstadoProceso.LISTO;
+        } else if (estado == EstadoProceso.BLOQUEADO_SUSPENDIDO) {
+            estado = EstadoProceso.LISTO_SUSPENDIDO;
+        } else {
+            throw new IllegalStateException(getEtiqueta() + ": no se puede desbloquear desde el estado " + estado);
+        }
         motivoBloqueo = MotivoBloqueo.NINGUNO;
+    }
+
+    /**
+     * El planificador a mediano plazo saca al proceso de la RAM y lo manda al swap.
+     * LISTO -> LISTO_SUSPENDIDO y BLOQUEADO -> BLOQUEADO_SUSPENDIDO (conserva el motivo).
+     */
+    public void suspender() {
+        if (estado == EstadoProceso.LISTO) {
+            estado = EstadoProceso.LISTO_SUSPENDIDO;
+        } else if (estado == EstadoProceso.BLOQUEADO) {
+            estado = EstadoProceso.BLOQUEADO_SUSPENDIDO;
+        } else {
+            throw new IllegalStateException(getEtiqueta() + ": no se puede suspender desde el estado " + estado);
+        }
+    }
+
+    /**
+     * El proceso vuelve del swap a la RAM.
+     * LISTO_SUSPENDIDO -> LISTO y BLOQUEADO_SUSPENDIDO -> BLOQUEADO.
+     */
+    public void reactivar() {
+        if (estado == EstadoProceso.LISTO_SUSPENDIDO) {
+            estado = EstadoProceso.LISTO;
+        } else if (estado == EstadoProceso.BLOQUEADO_SUSPENDIDO) {
+            estado = EstadoProceso.BLOQUEADO;
+        } else {
+            throw new IllegalStateException(getEtiqueta() + ": no se puede reactivar desde el estado " + estado);
+        }
     }
  
     /**
@@ -191,6 +241,89 @@ public class Pcb {
         }
         this.instruccionesEntreEs = cadaInstrucciones;
         this.ciclosEs = ciclos;
+    }
+    
+    
+    /**
+     * Convierte al proceso en uno de E/S sobre un archivo (crear, leer, actualizar o
+     * eliminar). Se llama antes de agregarlo al nucleo.
+     */
+    public void configurarArchivo(TipoOperacionES operacion, String ruta, int bloquesNuevos,
+                                  String nuevoNombre, String usuario) {
+        if (operacion == null || !operacion.esDeArchivo()) {
+            throw new IllegalArgumentException("La operacion de un proceso de E/S debe ser CRUD");
+        }
+        if (ruta == null || ruta.isBlank()) {
+            throw new IllegalArgumentException("Un proceso de E/S necesita la ruta del archivo");
+        }
+        exigirEstado(EstadoProceso.NUEVO, "configurar la operacion de archivo");
+        this.operacion = operacion;
+        this.ruta = ruta;
+        this.bloquesNuevos = bloquesNuevos;
+        this.nuevoNombre = nuevoNombre;
+        this.usuario = (usuario == null || usuario.isBlank()) ? "admin" : usuario;
+    }
+
+    /** true si es un proceso de E/S sobre un archivo. */
+    public boolean esDeArchivo() {
+        return operacion != null;
+    }
+
+    /** true si ya mando su solicitud al disco (cada proceso de E/S la manda una sola vez). */
+    public boolean yaPidioDisco() {
+        return discoPedido;
+    }
+
+    public void marcarDiscoPedido() {
+        discoPedido = true;
+    }
+
+    public TipoOperacionES getOperacion() {
+        return operacion;
+    }
+
+    public String getRuta() {
+        return ruta;
+    }
+
+    public int getBloquesNuevos() {
+        return bloquesNuevos;
+    }
+
+    public String getNuevoNombre() {
+        return nuevoNombre;
+    }
+
+    public String getUsuario() {
+        return usuario;
+    }
+    
+    /** Primer bloque del proceso en el swap, o -1 si no tiene. */
+    public int getBloqueSwap() {
+        return bloqueSwap;
+    }
+
+    public void setBloqueSwap(int bloqueSwap) {
+        this.bloqueSwap = bloqueSwap;
+    }
+
+    /** True mientras el disco no termina de escribir al proceso en el swap. */
+    public boolean isEscribiendoSwap() {
+        return escribiendoSwap;
+    }
+    
+
+    /** True mientras el disco no termina de leer al proceso desde el swap. */
+    public boolean isLeyendoSwap() {
+        return leyendoSwap;
+    }
+
+    public void setLeyendoSwap(boolean leyendoSwap) {
+        this.leyendoSwap = leyendoSwap;
+    }
+
+    public void setEscribiendoSwap(boolean escribiendoSwap) {
+        this.escribiendoSwap = escribiendoSwap;
     }
  
     /** True si acaba de ejecutar la instruccion que dispara una E/S y todavia le quedan instrucciones. */

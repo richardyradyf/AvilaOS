@@ -26,10 +26,25 @@ public final class SolicitudProceso {
     private final int cadaCiclos;
     private final int elementos;
     private final int idBuffer;
+    private final TipoOperacionES operacion;
+    private final String ruta;
+    private final int bloques;
+    private final String nuevoNombre;
+    private final String usuario;
 
+    /** Constructor del Proyecto 1 (procesos CPU bound e I/O bound que no tocan archivos). */
     public SolicitudProceso(String nombre, TipoProceso tipo, int instrucciones, int memoria,
                             int prioridad, int deadline, int idComputador, int ciclosEs,
                             int cadaCiclos, int elementos, int idBuffer) {
+        this(nombre, tipo, instrucciones, memoria, prioridad, deadline, idComputador, ciclosEs,
+                cadaCiclos, elementos, idBuffer, null, null, 0, null, "admin");
+    }
+
+    private SolicitudProceso(String nombre, TipoProceso tipo, int instrucciones, int memoria,
+                             int prioridad, int deadline, int idComputador, int ciclosEs,
+                             int cadaCiclos, int elementos, int idBuffer,
+                             TipoOperacionES operacion, String ruta, int bloques,
+                             String nuevoNombre, String usuario) {
         this.nombre = nombre;
         this.tipo = tipo;
         this.instrucciones = instrucciones;
@@ -41,6 +56,34 @@ public final class SolicitudProceso {
         this.cadaCiclos = cadaCiclos;
         this.elementos = elementos;
         this.idBuffer = idBuffer;
+        this.operacion = operacion;
+        this.ruta = ruta;
+        this.bloques = bloques;
+        this.nuevoNombre = nuevoNombre;
+        this.usuario = usuario;
+    }
+
+    /**
+     * Crea la solicitud de un proceso de E/S sobre un archivo o directorio (CRUD).
+     * El proceso es I/O bound y el computador se asigna automaticamente.
+     *
+     * @param bloques     bloques que ocupa el archivo nuevo (solo CREAR; en el resto, 0)
+     * @param nuevoNombre nombre nuevo (solo ACTUALIZAR); puede ser null
+     * @param usuario     dueno de la solicitud; si es null o vacio se usa "admin"
+     * - operacion, ruta, bloques, nuevoNombre, usuario: solo procesos de E/S sobre archivos (deEs).
+     */
+    public static SolicitudProceso deEs(String nombre, int instrucciones, int memoria, int prioridad,
+                                        int deadline, TipoOperacionES operacion, String ruta,
+                                        int bloques, String nuevoNombre, String usuario) {
+        if (operacion == null || !operacion.esDeArchivo()) {
+            throw new IllegalArgumentException("Un proceso de E/S necesita una operaci\u00f3n CRUD");
+        }
+        if (ruta == null || ruta.isBlank()) {
+            throw new IllegalArgumentException("Un proceso de E/S necesita la ruta del archivo");
+        }
+        String dueno = (usuario == null || usuario.isBlank()) ? "admin" : usuario.trim();
+        return new SolicitudProceso(nombre, TipoProceso.IO_BOUND, instrucciones, memoria, prioridad,
+                deadline, 0, 0, 0, 0, 0, operacion, ruta.trim(), bloques, nuevoNombre, dueno);
     }
 
     public String getNombre() {
@@ -90,9 +133,39 @@ public final class SolicitudProceso {
     public int getIdBuffer() {
         return idBuffer;
     }
+    
+    
+    /** true si es un proceso de E/S sobre un archivo (creado con deEs). */
+    public boolean esDeEs() {
+        return operacion != null;
+    }
+
+    public TipoOperacionES getOperacion() {
+        return operacion;
+    }
+
+    public String getRuta() {
+        return ruta;
+    }
+
+    public int getBloques() {
+        return bloques;
+    }
+
+    public String getNuevoNombre() {
+        return nuevoNombre;
+    }
+
+    public String getUsuario() {
+        return usuario;
+    }
 
     @Override
     public String toString() {
+        if (esDeEs()) {
+            return nombre + " [E/S " + operacion + " " + ruta + ", memoria=" + memoria
+                    + " MB, prioridad=" + prioridad + ", deadline=" + deadline + ", usuario=" + usuario + "]";
+        }
         return nombre + " [" + tipo + ", memoria=" + memoria + " MB, prioridad=" + prioridad
                 + ", deadline=" + deadline + ", computador=" + (esAutomatico() ? "automático" : idComputador) + "]";
     }

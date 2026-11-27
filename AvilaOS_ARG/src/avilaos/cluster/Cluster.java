@@ -8,43 +8,35 @@ import avilaos.hardware.RelojGlobal;
 import avilaos.model.Pcb;
 import avilaos.model.TipoProceso;
 import avilaos.scheduler.Planificador;
-import avilaos.sync.BufferAcotado;
-import avilaos.sync.GestorBuffers;
-import avilaos.sync.ProgramaBuffer;
 import avilaos.util.Bitacora;
 import avilaos.util.Iterador;
 import avilaos.util.Lista;
 import java.util.concurrent.Semaphore;
+import avilaos.model.SolicitudProceso;
 
 /**
  * @author richard
  * 
- * El sistema distribuido completo: un reloj global, una bitacora compartida y
- * dos o mas computadores. Es la unica puerta de entrada para la interfaz grafica
- * y para el cargador de configuracion.
+ * El sistema completo: un reloj global, una bitacora y un solo computador.
+ * Es la unica puerta de entrada para la interfaz grafica y para el cargador
+ * de configuracion.
  *
- * Los computadores se agregan antes de iniciar el reloj (el minimo es 2).
+ * El computador se agrega antes de iniciar el reloj.
  */
 public class Cluster {
  
-    public static final int MINIMO_COMPUTADORES = 2;
+    public static final int MINIMO_COMPUTADORES = 1;
+    public static final int MAXIMO_COMPUTADORES = 1;
  
     private final RelojGlobal reloj;
     private final Bitacora bitacora;
-    private final GestorBuffers gestor;
     private final Lista<Computador> computadores = new Lista<>();
     private final Semaphore mutex = new Semaphore(1);
     private boolean conectadoAlReloj = false;
  
     public Cluster(int duracionCicloMs, int maximoMensajesBitacora) {
-        this(duracionCicloMs, maximoMensajesBitacora, 0);
-    }
- 
-    /** @param latenciaRed ciclos que tarda cada acceso a un buffer de otro computador */
-    public Cluster(int duracionCicloMs, int maximoMensajesBitacora, int latenciaRed) {
         this.reloj = new RelojGlobal(duracionCicloMs);
         this.bitacora = new Bitacora(maximoMensajesBitacora);
-        this.gestor = new GestorBuffers(latenciaRed, bitacora);
     }
  
     /** Agrega un computador; su identificador es el siguiente (1, 2, 3...). */
@@ -54,8 +46,10 @@ public class Cluster {
             if (conectadoAlReloj || reloj.estaActivo()) {
                 throw new IllegalStateException("No se pueden agregar computadores con el reloj en marcha");
             }
+            if (computadores.tamano() >= MAXIMO_COMPUTADORES) {
+                throw new IllegalStateException("El sistema tiene un solo computador");
+            }
             Computador nuevo = new Computador(computadores.tamano() + 1, memoriaMb, planificador, bitacora);
-            gestor.registrarNucleo(nuevo.getNucleo());
             computadores.agregarAlFinal(nuevo);
             bitacora.registrar(reloj.getCicloActual(), "Computador " + nuevo.getId() + " agregado al sistema: " + nuevo);
             return nuevo;
@@ -64,7 +58,7 @@ public class Cluster {
         }
     }
  
-    // ---- creacion de procesos y buffers ----
+    // ---- creacion de procesos ----
  
     /** Crea un proceso generico (por ejemplo CPU bound) con el ciclo actual como ciclo de creacion. */
     public Pcb crearProceso(int idComputador, String nombre, TipoProceso tipo, int prioridad,
@@ -83,31 +77,16 @@ public class Cluster {
         c.getNucleo().agregarProceso(p);
         return p;
     }
- 
-    /**
-     * Crea un productor o consumidor que trabaja sobre un buffer. Sus instrucciones se
-     * calculan: elementos x (cadaCiclos + 5).
-     */
-    public Pcb crearProcesoBuffer(int idComputador, String nombre, TipoProceso tipo, int prioridad,
-                                  int memoria, int deadline, int idBuffer, int cadaCiclos, int elementos) {
-        int instrucciones = ProgramaBuffer.instruccionesTotales(tipo, elementos, cadaCiclos);
-        gestor.getBuffer(idBuffer);   // falla pronto si el buffer no existe
-        Computador c = resolverComputador(idComputador, memoria);
-        Pcb p = new Pcb(nombre, c.getId(), tipo, prioridad, memoria, instrucciones, deadline,
-                reloj.getCicloActual());
-        gestor.asignar(p, idBuffer, cadaCiclos);
-        try {
-            c.getNucleo().agregarProceso(p);
-        } catch (RuntimeException e) {
-            gestor.alTerminar(p);   // deshace la asignacion si el nucleo lo rechazo
-            throw e;
-        }
+    
+    
+    /** Crea un proceso de E/S sobre un archivo a partir de una solicitud hecha con deEs. */
+    public Pcb crearProcesoArchivo(SolicitudProceso s) {
+        Computador c = resolverComputador(s.getIdComputador(), s.getMemoria());
+        Pcb p = new Pcb(s.getNombre(), c.getId(), TipoProceso.IO_BOUND, s.getPrioridad(), s.getMemoria(),
+                s.getInstrucciones(), s.getDeadline(), reloj.getCicloActual());
+        p.configurarArchivo(s.getOperacion(), s.getRuta(), s.getBloques(), s.getNuevoNombre(), s.getUsuario());
+        c.getNucleo().agregarProceso(p);
         return p;
-    }
- 
-    /** Crea un buffer en la RAM de un computador (0 = automatico); 1 MB por espacio. */
-    public BufferAcotado crearBuffer(int idAnfitrion, int capacidad) {
-        return gestor.crearBuffer(resolverComputador(idAnfitrion, capacidad).getId(), capacidad);
     }
  
     /** Cambia en caliente la politica de un computador. */
@@ -118,9 +97,8 @@ public class Cluster {
     // ---- control del reloj ----
  
     public void iniciar() {
-        if (cantidadComputadores() < MINIMO_COMPUTADORES) {
-            throw new IllegalStateException("El sistema necesita al menos " + MINIMO_COMPUTADORES
-                    + " computadores para iniciar");
+         if (cantidadComputadores() < MINIMO_COMPUTADORES) {
+            throw new IllegalStateException("El sistema necesita un computador para iniciar");
         }
         conectarAlReloj();
         reloj.iniciar();
@@ -146,10 +124,6 @@ public class Cluster {
  
     public void setDuracionCicloMs(int ms) {
         reloj.setDuracionCicloMs(ms);
-    }
- 
-    public void setLatenciaRed(int ciclos) {
-        gestor.setLatenciaRed(ciclos);
     }
  
     // ---- consulta ----
@@ -202,14 +176,6 @@ public class Cluster {
         return bitacora;
     }
  
-    public GestorBuffers getGestorBuffers() {
-        return gestor;
-    }
- 
-    public BufferAcotado[] getBuffers() {
-        return gestor.getBuffers();
-    }
- 
     /** Cantidad de procesos que ya terminaron, sumando todos los computadores. */
     public int contarTerminados() {
         int total = 0;
@@ -222,8 +188,8 @@ public class Cluster {
  
     // ---- privados ----
  
-    /** Conecta los computadores y el gestor al reloj, una sola vez y en el orden correcto. */
-    private void conectarAlReloj() {
+    /** Conecta los computadores al reloj, una sola vez. */
+    public void conectarAlReloj() {
         mutex.acquireUninterruptibly();
         try {
             if (conectadoAlReloj) {
@@ -233,7 +199,6 @@ public class Cluster {
             while (it.tieneSiguiente()) {
                 it.siguiente().registrarEn(reloj);
             }
-            reloj.registrar(gestor);   // siempre despues de todos los nucleos
             conectadoAlReloj = true;
         } finally {
             mutex.release();

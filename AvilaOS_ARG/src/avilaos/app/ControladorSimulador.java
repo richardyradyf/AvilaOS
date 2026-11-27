@@ -1,12 +1,13 @@
 package avilaos.app;
 
 import avilaos.cluster.Cluster;
-import avilaos.config.ValidadorEntradas;
+import avilaos.fs.ControlPermisos;
+import avilaos.fs.SesionUsuario;
+import avilaos.fs.SistemaArchivos;
 import avilaos.gui.AccionesUsuario;
 import avilaos.gui.ControlSimulacion;
 import avilaos.model.PoliticaPlanificacion;
 import avilaos.model.SolicitudProceso;
-import avilaos.model.TipoProceso;
 import avilaos.scheduler.FabricaPlanificadores;
 
 /**
@@ -19,6 +20,8 @@ import avilaos.scheduler.FabricaPlanificadores;
 public class ControladorSimulador implements AccionesUsuario, ControlSimulacion {
 
     private final Cluster cluster;
+    private SesionUsuario sesion;
+    private SistemaArchivos sistemaArchivos;
 
     public ControladorSimulador(Cluster cluster) {
         if (cluster == null) {
@@ -27,25 +30,43 @@ public class ControladorSimulador implements AccionesUsuario, ControlSimulacion 
         this.cluster = cluster;
     }
 
+    /** Conecta el modo de usuario: desde aqui se rechazan las operaciones no permitidas. */
+    public void setPermisos(SesionUsuario sesion, SistemaArchivos sistemaArchivos) {
+        this.sesion = sesion;
+        this.sistemaArchivos = sistemaArchivos;
+    }
+
     @Override
     public String crearProceso(SolicitudProceso s) {
         try {
+            if (enModoUsuario()) {
+                if (!s.esDeEs()) {
+                    return "Modo usuario: solo se pueden crear procesos de E/S sobre archivos";
+                }
+                String rechazo = ControlPermisos.verificar(sesion, s.getOperacion(), s.getRuta(), sistemaArchivos);
+                if (rechazo != null) {
+                    return rechazo;
+                }
+                s = SolicitudProceso.deEs(s.getNombre(), s.getInstrucciones(), s.getMemoria(), s.getPrioridad(),
+                        s.getDeadline(), s.getOperacion(), s.getRuta(), s.getBloques(), s.getNuevoNombre(),
+                        sesion.getUsuario());
+            }
+            if (s.esDeEs()) {
+                cluster.crearProcesoArchivo(s);
+                return null;
+            }
             switch (s.getTipo()) {
+                case CPU_BOUND:
+                    cluster.crearProceso(s.getIdComputador(), s.getNombre(), s.getTipo(),
+                            s.getPrioridad(), s.getMemoria(), s.getInstrucciones(), s.getDeadline());
+                    break;
                 case IO_BOUND:
                     cluster.crearProcesoEs(s.getIdComputador(), s.getNombre(), s.getPrioridad(),
                             s.getMemoria(), s.getInstrucciones(), s.getDeadline(),
                             s.getCadaCiclos(), s.getCiclosEs());
                     break;
-                case PRODUCTOR:
-                case CONSUMIDOR:
-                    cluster.crearProcesoBuffer(s.getIdComputador(), s.getNombre(), s.getTipo(),
-                            s.getPrioridad(), s.getMemoria(), s.getDeadline(), s.getIdBuffer(),
-                            s.getCadaCiclos(), s.getElementos());
-                    break;
                 default:
-                    cluster.crearProceso(s.getIdComputador(), s.getNombre(), s.getTipo(),
-                            s.getPrioridad(), s.getMemoria(), s.getInstrucciones(), s.getDeadline());
-                    break;
+                    return "Tipo de proceso no soportado: " + s.getTipo();
             }
             return null;
         } catch (RuntimeException e) {
@@ -84,19 +105,16 @@ public class ControladorSimulador implements AccionesUsuario, ControlSimulacion 
     }
 
     @Override
-    public String setLatenciaRed(int ciclos) {
-        return ejecutar(() -> cluster.setLatenciaRed(ciclos));
-    }
-
-    @Override
-    public String crearBuffer(int idAnfitrion, int capacidad) {
-        return ejecutar(() -> cluster.crearBuffer(idAnfitrion, capacidad));
-    }
-
-    @Override
     public String cambiarPolitica(int idComputador, PoliticaPlanificacion politica, int quantum) {
+        if (enModoUsuario()) {
+            return "Modo usuario: solo el administrador puede cambiar la política de planificación";
+        }
         return ejecutar(() -> cluster.cambiarPlanificador(idComputador,
                 FabricaPlanificadores.crear(politica, quantum)));
+    }
+
+    private boolean enModoUsuario() {
+        return sesion != null && sistemaArchivos != null && !sesion.esAdministrador();
     }
 
     private static String ejecutar(Runnable accion) {

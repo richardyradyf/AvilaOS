@@ -4,9 +4,7 @@ package avilaos.model;
 public enum TipoProceso {
 
     CPU_BOUND("CPU bound"),
-    IO_BOUND("I/O bound"),
-    PRODUCTOR("Productor"),
-    CONSUMIDOR("Consumidor");
+    IO_BOUND("I/O bound");
 
     private final String nombreVisible;
 

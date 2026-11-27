@@ -10,7 +10,7 @@ import avilaos.model.MotivoBloqueo;
 import avilaos.model.Pcb;
 import avilaos.model.TipoProceso;
 
-/** Pruebas del PCB: creacion, ciclo de vida, transiciones invalidas y deadline. */
+/** Pruebas del PCB: creacion, ciclo de vida, transiciones invalidas, suspension y deadline.*/
 public class PruebaPcb {
 
     private static int total = 0;
@@ -21,6 +21,7 @@ public class PruebaPcb {
         probarCreacion();
         probarCicloDeVida();
         probarTransicionesInvalidas();
+        probarSuspension();
         probarDeadline();
         probarValidaciones();
 
@@ -66,9 +67,9 @@ public class PruebaPcb {
         verificar(p.getPc() == 3 && p.getMar() == 3, "tras 3 instrucciones, PC y MAR valen 3");
         verificar(p.getInstruccionesRestantes() == 2, "quedan 2 instrucciones");
 
-        p.bloquear(MotivoBloqueo.BUFFER_LLENO);
+        p.bloquear(MotivoBloqueo.REGION_CRITICA_OCUPADA);
         verificar(p.getEstado() == EstadoProceso.BLOQUEADO, "bloquear: EJECUCION -> BLOQUEADO");
-        verificar(p.getMotivoBloqueo() == MotivoBloqueo.BUFFER_LLENO, "se guarda el motivo del bloqueo");
+        verificar(p.getMotivoBloqueo() == MotivoBloqueo.REGION_CRITICA_OCUPADA, "se guarda el motivo del bloqueo");
 
         p.desbloquear();
         verificar(p.getEstado() == EstadoProceso.LISTO, "desbloquear: BLOQUEADO -> LISTO");
@@ -116,6 +117,49 @@ public class PruebaPcb {
                 "TERMINADO no tiene transiciones de salida");
     }
 
+        private static void probarSuspension() {
+        System.out.println("--- Suspension (siete estados) ---");
+        Pcb p = nuevo("Suspendible", 5);
+        verificar(lanza(IllegalStateException.class, () -> p.suspender()),
+                "un proceso NUEVO no se suspende");
+
+        p.admitir();
+        p.suspender();
+        verificar(p.getEstado() == EstadoProceso.LISTO_SUSPENDIDO, "suspender: LISTO -> LISTO_SUSPENDIDO");
+        verificar(p.getEstado().estaSuspendido(), "LISTO_SUSPENDIDO cuenta como suspendido");
+        verificar(lanza(IllegalStateException.class, () -> p.despachar(1)),
+                "un proceso suspendido no se despacha");
+        verificar(lanza(IllegalStateException.class, () -> p.suspender()),
+                "no se suspende dos veces");
+        p.reactivar();
+        verificar(p.getEstado() == EstadoProceso.LISTO, "reactivar: LISTO_SUSPENDIDO -> LISTO");
+
+        p.despachar(3);
+        verificar(lanza(IllegalStateException.class, () -> p.suspender()),
+                "un proceso en EJECUCION no se suspende");
+        p.bloquear(MotivoBloqueo.ESPERA_ES);
+        p.suspender();
+        verificar(p.getEstado() == EstadoProceso.BLOQUEADO_SUSPENDIDO,
+                "suspender: BLOQUEADO -> BLOQUEADO_SUSPENDIDO");
+        verificar(p.getMotivoBloqueo() == MotivoBloqueo.ESPERA_ES, "al suspenderse conserva el motivo");
+
+        p.reactivar();
+        verificar(p.getEstado() == EstadoProceso.BLOQUEADO, "reactivar: BLOQUEADO_SUSPENDIDO -> BLOQUEADO");
+        p.suspender();
+
+        p.desbloquear();
+        verificar(p.getEstado() == EstadoProceso.LISTO_SUSPENDIDO,
+                "el evento llega suspendido: BLOQUEADO_SUSPENDIDO -> LISTO_SUSPENDIDO");
+        verificar(p.getMotivoBloqueo() == MotivoBloqueo.NINGUNO, "el motivo se limpia al desbloquear");
+        verificar(lanza(IllegalStateException.class, () -> p.desbloquear()),
+                "LISTO_SUSPENDIDO no se desbloquea");
+
+        p.terminar(10, true);
+        verificar(p.getEstado() == EstadoProceso.TERMINADO, "un suspendido puede terminar por deadline");
+        verificar(lanza(IllegalStateException.class, () -> p.reactivar()),
+                "un proceso TERMINADO no se reactiva");
+    }
+    
     private static void probarDeadline() {
         System.out.println("--- Deadline ---");
         Pcb p = new Pcb("Deadline", 1, TipoProceso.IO_BOUND, 1, 32, 10, 20, 10);
